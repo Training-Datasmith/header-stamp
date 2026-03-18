@@ -1,4 +1,6 @@
 <?php
+
+declare(strict_types=1);
 /**
  * Copyright since 2007 PrestaShop SA and Contributors
  * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
@@ -22,6 +24,6 @@ class EmptyNewlineHeader extends Module
 {
     // This PHP file has no header comment but does have an empty newline right after the <?php tag
     // Most editors/IDEs add this newline automatically
-    // It should add the license header without adding an unnecessary extra empty newline 
+    // It should add the license header without adding an unnecessary extra empty newline
     // This also keeps validator.prestashop.com happy :)
 }

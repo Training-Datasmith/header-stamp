@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Copyright since 2007 PrestaShop SA and Contributors
  * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
@@ -39,7 +40,7 @@ use Symfony\Component\Yaml\Yaml;
 
 class UpdateLicensesCommand extends Command
 {
-    const CONFIG_PARAMETERS_MAPPING = [
+    public const CONFIG_PARAMETERS_MAPPING = [
         'extensions' => 'extensions',
         'excludedFiles' => 'exclude',
         'notNamePatterns' => 'not-name',
@@ -50,7 +51,7 @@ class UpdateLicensesCommand extends Command
         'discriminationString' => 'header-discrimination-string',
     ];
 
-    const DEFAULT_CONFIG = [
+    public const DEFAULT_CONFIG = [
         'extensions' => [
             'php',
             'js',
@@ -77,7 +78,7 @@ class UpdateLicensesCommand extends Command
         ],
     ];
 
-    const DEFAULT_CONFIG_FILE = '.header-stamp-config.yml';
+    public const DEFAULT_CONFIG_FILE = '.header-stamp-config.yml';
 
     /**
      * @var LicenseHeader

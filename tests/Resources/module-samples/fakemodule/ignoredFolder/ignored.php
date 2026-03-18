@@ -1,5 +1,7 @@
 <?php
 
-class ignored {
+declare(strict_types=1);
 
+class ignored
+{
 }

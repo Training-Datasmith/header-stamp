@@ -1,4 +1,6 @@
 <?php
+
+declare(strict_types=1);
 /**
  * Copyright since 2007 PrestaShop SA and Contributors
  * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
@@ -38,7 +40,7 @@ $gsitemap = Module::getInstanceByName('gsitemap');
 if ($gsitemap->active) {
     /* Check if the requested shop exists */
     $shops = Db::getInstance()->ExecuteS('SELECT id_shop FROM `' . _DB_PREFIX_ . 'shop`');
-    $list_id_shop = array();
+    $list_id_shop = [];
     foreach ($shops as $shop) {
         $list_id_shop[] = (int) $shop['id_shop'];
     }
