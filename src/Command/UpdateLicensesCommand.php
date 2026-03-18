@@ -340,7 +340,7 @@ class UpdateLicensesCommand extends Command
         $this->reporter = new Reporter();
 
         foreach ($this->extensions as $extension) {
-            $this->findAndCheckExtension($input, $output, $extension);
+            $this->findAndCheckExtension($output, $extension);
         }
 
         if ($this->runAsDry) {
@@ -360,7 +360,7 @@ class UpdateLicensesCommand extends Command
         return 0;
     }
 
-    private function findAndCheckExtension(InputInterface $input, OutputInterface $output, string $ext): void
+    private function findAndCheckExtension(OutputInterface $output, string $ext): void
     {
         if (!is_dir($this->targetDirectory)) {
             throw new \Exception('Could not get target directory. Check your permissions.');

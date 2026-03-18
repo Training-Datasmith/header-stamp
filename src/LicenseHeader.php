@@ -130,9 +130,7 @@ class LicenseHeader
         $endDelimiter = addcslashes($endDelimiter, '*#{}');
         $commentDelimiter = addcslashes($commentDelimiter, '*#{}');
 
-        $regex = '%^' . $startDelimiter . '([^' . $commentDelimiter . ']|[\r\n]|(' . $commentDelimiter . '+((?!\})|[\r\n])))*+' . $endDelimiter . '%';
-
-        return $regex;
+        return '%^' . $startDelimiter . '([^' . $commentDelimiter . ']|[\r\n]|(' . $commentDelimiter . '+((?!\})|[\r\n])))*+' . $endDelimiter . '%';
     }
 
     private function getLicenseRegex(string $startDelimiter, string $endDelimiter): string
