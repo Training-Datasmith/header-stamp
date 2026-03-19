@@ -225,10 +225,18 @@ class UpdateLicensesCommand extends Command
 
         // Adapt config to have absolute real path
         if (!empty($mergedConfig['license'])) {
-            $mergedConfig['license'] = realpath($mergedConfig['license']);
+            $resolvedLicense = realpath($mergedConfig['license']);
+            if ($resolvedLicense === false) {
+                throw new \RuntimeException(sprintf('License file not found or inaccessible: "%s"', $mergedConfig['license']));
+            }
+            $mergedConfig['license'] = $resolvedLicense;
         }
         if (!empty($mergedConfig['targetDirectory'])) {
-            $mergedConfig['targetDirectory'] = (string) realpath($mergedConfig['targetDirectory']);
+            $resolvedTarget = realpath($mergedConfig['targetDirectory']);
+            if ($resolvedTarget === false) {
+                throw new \RuntimeException(sprintf('Target directory not found or inaccessible: "%s"', $mergedConfig['targetDirectory']));
+            }
+            $mergedConfig['targetDirectory'] = $resolvedTarget;
         } else {
             $mergedConfig['targetDirectory'] = (string) getcwd();
         }
