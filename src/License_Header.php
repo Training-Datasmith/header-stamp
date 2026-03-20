@@ -57,6 +57,18 @@ class License_Header
         }
         return $this->content;
     }
+    /**
+     * Returns the license header text reformatted for the given file extension type.
+     *
+     * Rewrites the raw `/**` PHP comment block into the correct comment syntax
+     * for each supported type (HTML, Twig, Smarty `.tpl`, PHP, JS, TS, CSS, SCSS).
+     *
+     * @param string $type File extension without the leading dot (e.g. 'php', 'twig', 'vue').
+     *
+     * @return string The license text wrapped in comment delimiters appropriate for the type.
+     *
+     * @throws \RuntimeException When an unsupported file type is requested.
+     */
     public function get_content_by_type(string $type): string
     {
         if (!isset($this->content_by_types[$type])) {
@@ -84,6 +96,17 @@ class License_Header
         }
         return $this->content_by_types[$type];
     }
+    /**
+     * Returns a regular expression that matches an existing license comment block for the given type.
+     *
+     * Used to detect and replace pre-existing header blocks rather than prepending a duplicate.
+     *
+     * @param string $type File extension without the leading dot (e.g. 'php', 'twig', 'vue').
+     *
+     * @return string A PCRE pattern (with `%` as delimiter) that matches the expected comment block.
+     *
+     * @throws \RuntimeException When an unsupported file type is requested.
+     */
     public function get_regex_by_type(string $type): string
     {
         if (!isset($this->regex_by_types[$type])) {
@@ -111,6 +134,18 @@ class License_Header
         }
         return $this->regex_by_types[$type];
     }
+    /**
+     * Builds a regex pattern that matches a Twig-style block comment (e.g. `{# ... #}`).
+     *
+     * Twig comments use `{#` / `#}` delimiters and `#` as the inner comment prefix,
+     * which differs from the standard `/** ... *\/` PHP block handled by `get_license_regex()`.
+     *
+     * @param string $start_delimiter   Opening comment token (e.g. `{#`).
+     * @param string $end_delimiter     Closing comment token (e.g. `#}`).
+     * @param string $comment_delimiter Per-line prefix character inside the block (e.g. `#`).
+     *
+     * @return string A PCRE pattern anchored to the start of the string (`^`).
+     */
     public function get_twig_license_regex(string $start_delimiter, string $end_delimiter, string $comment_delimiter = '*'): string
     {
         $start_delimiter = addcslashes($start_delimiter, '*#{}');
