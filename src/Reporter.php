@@ -18,10 +18,8 @@
  * @copyright Since 2007 PrestaShop SA and Contributors
  * @license   https://opensource.org/licenses/AFL-3.0 Academic Free License version 3.0
  */
-
-declare(strict_types=1);
-
-namespace PrestaShop\HeaderStamp;
+declare (strict_types=1);
+namespace Presta_Shop\Header_Stamp;
 
 /**
  * Reporter in charge of reporting what HeaderStamp has done
@@ -31,31 +29,23 @@ class Reporter
     /**
      * @var array<string, array<int, string>>
      */
-    private $report = [
-        'fixed' => [],
-        'ignored' => [],
-        'failed' => [],
-    ];
-
-    public function reportLicenseHasBeenFixed(string $fixedFilename): void
+    private $report = ['fixed' => [], 'ignored' => [], 'failed' => []];
+    public function report_license_has_been_fixed(string $fixed_filename): void
     {
-        $this->report['fixed'][] = $fixedFilename;
+        $this->report['fixed'][] = $fixed_filename;
     }
-
-    public function reportLicenseWasFine(string $fixedFilename): void
+    public function report_license_was_fine(string $fixed_filename): void
     {
-        $this->report['nothing to fix'][] = $fixedFilename;
+        $this->report['nothing to fix'][] = $fixed_filename;
     }
-
-    public function reportLicenseCouldNotBeFixed(string $fixedFilename): void
+    public function report_license_could_not_be_fixed(string $fixed_filename): void
     {
-        $this->report['failed'][] = $fixedFilename;
+        $this->report['failed'][] = $fixed_filename;
     }
-
     /**
      * @return array<string, array<int, string>>
      */
-    public function getReport(): array
+    public function get_report(): array
     {
         return $this->report;
     }
