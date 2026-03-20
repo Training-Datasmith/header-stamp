@@ -2,7 +2,7 @@
     bootstrap="bootstrap.php"
     processIsolation="false">
   <php>
-    <env name="KERNEL_CLASS" value="Tests\Integration\TestKernel" />
+    <env name="KERNEL_CLASS" value="Tests\Integration\Test_Kernel" />
     <env name="SYMFONY_DEPRECATIONS_HELPER" value="weak"/>
   </php>
   <testsuites>
