@@ -69,7 +69,6 @@ $allowlist = [
         'PhpParser\\Node::hasAttribute',
         'PhpParser\\Node::getAttribute',
         'PhpParser\\Comment::getText',
-        'Symfony\\Component\\Finder\\SplFileInfo::getContents',
     ],
     'tests/Integration/Command/Update_Licences_Command_Test.php' => [
         'PHPUnit\\Framework\\TestCase::assertEquals',
@@ -226,22 +225,6 @@ function is_allowlisted_call(string $site, string $class, string $method, array 
     return in_array($key, $allowlist[$site], true);
 }
 
-function is_method_allowlisted_on_site(string $site, string $method, array $allowlist): bool
-{
-    $site = normalize_site($site);
-    if (!isset($allowlist[$site])) {
-        return false;
-    }
-    $suffix = '::' . $method;
-    foreach ($allowlist[$site] as $entry) {
-        if (strlen($entry) >= strlen($suffix) && substr($entry, -strlen($suffix)) === $suffix) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 /**
  * @return list<string>
  */
@@ -272,11 +255,168 @@ function inheritance_allowlist_bases(string $fqcn): array
     return $bases;
 }
 
-function guess_receiver_from_variable(string $var, array $uses): string
+function fqcn_from_short_class(string $short, array $uses, string $namespace): string
+{
+    if (strpos($short, '\\') !== false) {
+        return $short;
+    }
+    if (isset($uses[$short])) {
+        return $uses[$short];
+    }
+
+    return '';
+}
+
+/**
+ * @param array<int, array{0: int, 1: string, 2?: int}|string> $tokens
+ */
+function known_reflection_method_return_type(string $receiver, string $method): string
+{
+    if ($receiver === 'ReflectionClass') {
+        if ($method === 'getProperty') {
+            return 'ReflectionProperty';
+        }
+        if ($method === 'getMethod') {
+            return 'ReflectionMethod';
+        }
+    }
+
+    return '';
+}
+
+/**
+ * @param array<int, array{0: int, 1: string, 2?: int}|string> $tokens
+ * @param array<string, string> $var_types
+ */
+function infer_type_from_assignment_rhs(
+    array $tokens,
+    int $start,
+    string $namespace,
+    string $class,
+    array $uses,
+    array $var_types
+): string {
+    $type = infer_type_from_new_expression($tokens, $start, $uses, $namespace);
+    if ($type !== '') {
+        return $type;
+    }
+
+    $count = count($tokens);
+    $end = $start;
+    while ($end < $count && $tokens[$end] !== ';') {
+        ++$end;
+    }
+    for ($j = $end - 1; $j >= $start; --$j) {
+        if (!is_object_operator_token($tokens[$j])) {
+            continue;
+        }
+        if (!isset($tokens[$j + 1])
+            || !is_array($tokens[$j + 1])
+            || $tokens[$j + 1][0] !== T_STRING
+        ) {
+            continue;
+        }
+        $paren = $j + 2;
+        while ($paren < $end && is_array($tokens[$paren]) && $tokens[$paren][0] === T_WHITESPACE) {
+            ++$paren;
+        }
+        if ($paren >= $end || $tokens[$paren] !== '(') {
+            continue;
+        }
+        $method = $tokens[$j + 1][1];
+        $receiver = resolve_object_call_receiver($tokens, $j, $namespace, $class, $uses, $var_types);
+        $return_type = known_reflection_method_return_type($receiver, $method);
+        if ($return_type !== '') {
+            return $return_type;
+        }
+
+        return '';
+    }
+
+    return '';
+}
+
+function infer_type_from_new_expression(array $tokens, int $start, array $uses, string $namespace): string
+{
+    $count = count($tokens);
+    for ($j = $start; $j < $count; ++$j) {
+        $tok = $tokens[$j];
+        if (is_array($tok) && $tok[0] === T_WHITESPACE) {
+            continue;
+        }
+        if ($tok === '(') {
+            continue;
+        }
+        if (is_array($tok) && $tok[0] === T_NEW) {
+            for ($k = $j + 1; $k < $count; ++$k) {
+                $inner = $tokens[$k];
+                if (is_array($inner) && $inner[0] === T_WHITESPACE) {
+                    continue;
+                }
+                if (is_array($inner) && in_array($inner[0], [T_STRING, T_NS_SEPARATOR], true)) {
+                    $class = '';
+                    for ($m = $k; $m < $count; ++$m) {
+                        if (is_array($tokens[$m]) && in_array($tokens[$m][0], [T_STRING, T_NS_SEPARATOR], true)) {
+                            $class .= $tokens[$m][1];
+                            continue;
+                        }
+                        if (is_array($tokens[$m]) && $tokens[$m][0] === T_WHITESPACE) {
+                            continue;
+                        }
+                        break;
+                    }
+
+                    return fqcn_from_short_class($class, $uses, $namespace);
+                }
+                break;
+            }
+        }
+        if (is_array($tok) && $tok[0] === T_STRING) {
+            return fqcn_from_short_class($tok[1], $uses, $namespace);
+        }
+        break;
+    }
+
+    return '';
+}
+
+/**
+ * @param array{0: int, 1: string, 2?: int}|string $token
+ */
+function is_object_operator_token($token): bool
+{
+    return $token === '->' || (is_array($token) && $token[0] === T_OBJECT_OPERATOR);
+}
+
+/**
+ * @param array<int, array{0: int, 1: string, 2?: int}|string> $tokens
+ */
+function skip_optional_call_arguments_backwards(array $tokens, int &$index): void
+{
+    if ($index < 0 || $tokens[$index] !== ')') {
+        return;
+    }
+    $depth = 1;
+    --$index;
+    while ($index >= 0 && $depth > 0) {
+        $tok = $tokens[$index];
+        if ($tok === ')') {
+            $depth++;
+        } elseif ($tok === '(') {
+            $depth--;
+        }
+        --$index;
+    }
+}
+
+function guess_receiver_from_variable(string $var, array $uses, array $var_types = []): string
 {
     $key = ltrim($var, '$');
     if (isset($uses[$key])) {
         return $uses[$key];
+    }
+    if (isset($var_types[$key])) {
+        return $var_types[$key];
     }
     $hints = [
         'output' => 'Symfony\\Component\\Console\\Output\\OutputInterface',
@@ -301,45 +441,54 @@ function guess_receiver_from_variable(string $var, array $uses): string
     return $hints[$key] ?? '';
 }
 
-function resolve_object_call_receiver(array $tokens, int $op_index, string $namespace, string $class, array $uses): string
+/**
+ * @param array<int, array{0: int, 1: string, 2?: int}|string> $tokens
+ * @param array<string, string> $var_types
+ */
+function resolve_object_call_receiver(array $tokens, int $op_index, string $namespace, string $class, array $uses, array $var_types): string
 {
-    $paren_depth = 0;
-    for ($j = $op_index - 1; $j >= 0; --$j) {
-        $tok = $tokens[$j];
-        if (is_array($tok) && $tok[0] === T_WHITESPACE) {
-            continue;
+    $j = $op_index - 1;
+    skip_optional_call_arguments_backwards($tokens, $j);
+
+    while ($j >= 0) {
+        while ($j >= 0 && is_array($tokens[$j]) && $tokens[$j][0] === T_WHITESPACE) {
+            --$j;
         }
-        if ($tok === ')') {
-            $paren_depth++;
-            continue;
-        }
-        if ($tok === '(') {
-            if ($paren_depth > 0) {
-                $paren_depth--;
+        if ($j >= 0 && is_array($tokens[$j]) && $tokens[$j][0] === T_STRING) {
+            $prev = $j - 1;
+            while ($prev >= 0 && is_array($tokens[$prev]) && $tokens[$prev][0] === T_WHITESPACE) {
+                --$prev;
+            }
+            if ($prev >= 0 && is_object_operator_token($tokens[$prev])) {
+                $j = $prev - 1;
+                skip_optional_call_arguments_backwards($tokens, $j);
                 continue;
             }
-            continue;
         }
-        if ($paren_depth > 0) {
-            continue;
-        }
-        if (is_array($tok) && $tok[0] === T_VARIABLE) {
-            $var = $tok[1];
-            if ($var === '$this') {
-                return trim($namespace, '\\') . '\\' . $class;
-            }
-            $key = ltrim($var, '$');
-            if (isset($uses[$key])) {
-                return $uses[$key];
-            }
+        break;
+    }
 
-            return '';
+    while ($j >= 0 && is_array($tokens[$j]) && $tokens[$j][0] === T_WHITESPACE) {
+        --$j;
+    }
+    if ($j >= 0 && is_array($tokens[$j]) && $tokens[$j][0] === T_VARIABLE) {
+        $var = $tokens[$j][1];
+        if ($var === '$this') {
+            return trim($namespace, '\\') . '\\' . $class;
         }
-        if (is_array($tok) && $tok[0] === T_STRING) {
-            continue;
+
+        return guess_receiver_from_variable($var, $uses, $var_types);
+    }
+    if ($j >= 0 && is_array($tokens[$j]) && $tokens[$j][0] === T_NEW) {
+        return infer_type_from_new_expression($tokens, $j, $uses, $namespace);
+    }
+    if ($j >= 0 && is_array($tokens[$j]) && $tokens[$j][0] === T_STRING && $j >= 1 && $tokens[$j - 1] === '(') {
+        $prev = $j - 2;
+        while ($prev >= 0 && is_array($tokens[$prev]) && $tokens[$prev][0] === T_WHITESPACE) {
+            --$prev;
         }
-        if ($tok === ';' || $tok === '{' || $tok === '}') {
-            break;
+        if ($prev >= 0 && is_array($tokens[$prev]) && $tokens[$prev][0] === T_NEW) {
+            return infer_type_from_new_expression($tokens, $prev, $uses, $namespace);
         }
     }
 
@@ -369,8 +518,28 @@ function scan_php_tokens(string $site, string $contents, array $allowlist, array
     $namespace = '';
     $class = '';
     $uses = [];
+    /** @var array<string, string> $var_types */
+    $var_types = [];
 
     for ($i = 0; $i < $count; ++$i) {
+        if (is_array($tokens[$i]) && $tokens[$i][0] === T_VARIABLE) {
+            $eq = $i + 1;
+            while ($eq < $count && is_array($tokens[$eq]) && $tokens[$eq][0] === T_WHITESPACE) {
+                ++$eq;
+            }
+            if (isset($tokens[$eq]) && $tokens[$eq] === '=') {
+                $vn = ltrim($tokens[$i][1], '$');
+                $rhs = $eq + 1;
+                while ($rhs < $count && is_array($tokens[$rhs]) && $tokens[$rhs][0] === T_WHITESPACE) {
+                    ++$rhs;
+                }
+                $type = infer_type_from_assignment_rhs($tokens, $rhs, $namespace, $class, $uses, $var_types);
+                if ($type !== '') {
+                    $var_types[$vn] = $type;
+                }
+            }
+        }
+
         $token = $tokens[$i];
         if (!is_array($token)) {
             continue;
@@ -482,22 +651,7 @@ function scan_php_tokens(string $site, string $contents, array $allowlist, array
             if (!has_camel_hump($method)) {
                 continue;
             }
-            $resolved_receiver = resolve_object_call_receiver($tokens, $i, $namespace, $class, $uses);
-            if ($resolved_receiver === '') {
-                $var = '';
-                for ($k = $i - 1; $k >= 0; --$k) {
-                    if (is_array($tokens[$k]) && $tokens[$k][0] === T_VARIABLE) {
-                        $var = $tokens[$k][1];
-                        break;
-                    }
-                }
-                if ($var !== '') {
-                    $resolved_receiver = guess_receiver_from_variable($var, $uses);
-                }
-            }
-            if ($resolved_receiver === '' && is_method_allowlisted_on_site($site, $method, $allowlist)) {
-                continue;
-            }
+            $resolved_receiver = resolve_object_call_receiver($tokens, $i, $namespace, $class, $uses, $var_types);
             if ($resolved_receiver === '') {
                 $failures[] = sprintf('%s: unresolved camelCase method call %s', $site, $method);
                 continue;
@@ -632,6 +786,53 @@ PHP;
     }
     if (!$found_repo_camel) {
         fwrite(STDERR, "rename-check demo: repo-owned getContents must be rejected outside allowlist.\n");
+        exit(1);
+    }
+
+    $command_site = 'src/Command/Update_Licenses_Command.php';
+    $mystery_reject = <<<'PHP'
+<?php
+namespace Presta_Shop\Header_Stamp\Command;
+use Symfony\Component\Finder\Finder;
+class Demo_Command {
+    public function demo($mystery): void {
+        $mystery->getContents();
+    }
+}
+PHP;
+    $mystery_failures = scan_content($command_site, $mystery_reject, $allowlist, $forbidden_identifiers, $magic_methods);
+    $found_unresolved = false;
+    foreach ($mystery_failures as $failure) {
+        if (strpos($failure, 'unresolved camelCase method call getContents') !== false
+            || strpos($failure, 'getContents') !== false) {
+            $found_unresolved = true;
+        }
+    }
+    if (!$found_unresolved) {
+        fwrite(STDERR, "rename-check demo: \$mystery->getContents() must be rejected in command site.\n");
+        foreach ($mystery_failures as $f) {
+            fwrite(STDERR, $f . "\n");
+        }
+        exit(1);
+    }
+
+    $finder_allow = <<<'PHP'
+<?php
+namespace Presta_Shop\Header_Stamp\Command;
+use Symfony\Component\Finder\Finder;
+class Demo_Command {
+    public function demo(): void {
+        $finder = new Finder();
+        $finder->files()->name('*.php')->in('/tmp')->exclude([])->notPath([]);
+    }
+}
+PHP;
+    $finder_failures = scan_content($command_site, $finder_allow, $allowlist, $forbidden_identifiers, $magic_methods);
+    if ($finder_failures !== []) {
+        fwrite(STDERR, "rename-check demo: chained Finder::notPath must pass on command site.\n");
+        foreach ($finder_failures as $f) {
+            fwrite(STDERR, $f . "\n");
+        }
         exit(1);
     }
 }
