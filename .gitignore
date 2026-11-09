@@ -1,4 +1,7 @@
 vendor/
+composer.lock
+*.phar
+/.system-test/
 .idea
 tests/Resources/workspace/*
 tests/Integration/.phpunit.result.cache

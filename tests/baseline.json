@@ -1,0 +1,12 @@
+{
+    "baseline_commit": "936c4526eb1b7fe0468ec52a1fe2bdea013c9039",
+    "unit_phpunit_ok_line": "OK (19 tests, 28 assertions)",
+    "integration_phpunit_ok_line": "OK (10 tests, 31 assertions)",
+    "test_methods": {
+        "Tests\\Unit\\License_Header_Test::test_get_content": "testGetContent",
+        "Tests\\Unit\\License_Header_Test::test_get_content_by_type": "testGetContentByType",
+        "Tests\\Unit\\License_Header_Test::test_regex_matches_their_own_content": "testRegexMatchesTheirOwnContent",
+        "Tests\\Integration\\Command\\Update_Licences_Command_Test::test_command_modifications": "testCommandModifications",
+        "Tests\\Integration\\Command\\Update_Licences_Command_Test::test_command_dry_run": "testCommandDryRun"
+    }
+}

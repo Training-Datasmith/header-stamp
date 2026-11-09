@@ -9,6 +9,13 @@
             "email": "contact@prestashop.com"
         }
     ],
+    "repositories": [
+        {
+            "type": "composer",
+            "url": "https://raw.githubusercontent.com/Training-Datasmith/composer-index/remote-test-2026-11-09",
+            "canonical": false
+        }
+    ],
     "require": {
         "php": "^8.0 || ^7.2",
         "symfony/console": "^3.4 || ~4.0 || ~5.0 || ~6.0",
@@ -20,6 +27,8 @@
         "preferred-install": "dist",
         "prepend-autoloader": false,
         "optimize-autoloader": true,
+        "lock": false,
+        "sort-packages": true,
         "platform": {
             "php": "7.2.5"
         }
@@ -40,19 +49,26 @@
     },
     "author": "PrestaShop",
     "require-dev": {
-        "prestashop/php-dev-tools": "1.*",
+        "prestashop/php-dev-tools": "^5",
         "phpstan/phpstan": "^1.12",
-        "phpunit/phpunit": "^8.5"
+        "phpunit/phpunit": "^8.5.52"
     },
     "scripts": {
-        "cs-fixer": [
-            "@php -d date.timezone=UTC ./vendor/bin/php-cs-fixer fix --dry-run --diff --using-cache=no --diff-format udiff"
-        ],
         "integration-tests": [
-            "@php -d date.timezone=UTC ./vendor/phpunit/phpunit/phpunit -c tests/Integration/phpunit.xml"
+            "@php -d date.timezone=UTC -d error_reporting=32767 ./vendor/phpunit/phpunit/phpunit -c tests/Integration/phpunit.xml --colors=never"
         ],
         "unit-tests": [
-            "@php -d date.timezone=UTC ./vendor/phpunit/phpunit/phpunit -c tests/Unit/phpunit.xml"
+            "@php -d date.timezone=UTC -d error_reporting=32767 ./vendor/phpunit/phpunit/phpunit -c tests/Unit/phpunit.xml --colors=never"
+        ],
+        "lint": "bash scripts/lint-src.sh",
+        "pins": "@php scripts/check-cluster-pins.php",
+        "rename-check": "@php scripts/check-rename.php",
+        "test": [
+            "@unit-tests",
+            "@integration-tests",
+            "@pins",
+            "@rename-check",
+            "@lint"
         ]
     }
 }

@@ -23,13 +23,13 @@ declare(strict_types=1);
 namespace Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
-use PrestaShop\HeaderStamp\LicenseHeader;
+use Presta_Shop\Header_Stamp\License_Header;
 
-class LicenseHeaderTest extends TestCase
+class License_Header_Test extends TestCase
 {
-    public function testGetContent(): void
+    public function test_get_content(): void
     {
-        $licenseHeader = new LicenseHeader(__DIR__ . '/../../assets/afl.txt');
+        $license_header = new License_Header(__DIR__ . '/../../assets/afl.txt');
         $this->assertEquals('/**
  * Copyright since 2007 PrestaShop SA and Contributors
  * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
@@ -48,19 +48,19 @@ class LicenseHeaderTest extends TestCase
  * @copyright Since 2007 PrestaShop SA and Contributors
  * @license   https://opensource.org/licenses/AFL-3.0 Academic Free License version 3.0
  */
-', $licenseHeader->getContent());
+', $license_header->get_content());
     }
 
     /**
-     * @dataProvider getContentsByType
+     * @dataProvider get_contents_by_type
      */
-    public function testGetContentByType(string $type, string $expectedContent): void
+    public function test_get_content_by_type(string $type, string $expected_content): void
     {
-        $licenseHeader = new LicenseHeader(__DIR__ . '/../../assets/afl.txt');
-        $this->assertEquals($expectedContent, $licenseHeader->getContentByType($type));
+        $license_header = new License_Header(__DIR__ . '/../../assets/afl.txt');
+        $this->assertEquals($expected_content, $license_header->get_content_by_type($type));
     }
 
-    public static function getContentsByType(): iterable
+    public static function get_contents_by_type(): iterable
     {
         yield 'php' => [
             'php',
@@ -262,9 +262,9 @@ class LicenseHeaderTest extends TestCase
     }
 
     /**
-     * @dataProvider getTypesToCheck
+     * @dataProvider get_types_to_check
      */
-    public function testRegexMatchesTheirOwnContent(string $typeToCheck): void
+    public function test_regex_matches_their_own_content(string $type_to_check): void
     {
         $licenses = [
             __DIR__ . '/../../assets/afl.txt',
@@ -272,18 +272,18 @@ class LicenseHeaderTest extends TestCase
         ];
 
         foreach ($licenses as $license) {
-            $licenseHeader = new LicenseHeader($license);
+            $license_header = new License_Header($license);
             // We get the license content for the specified type
-            $typeContent = $licenseHeader->getContentByType($typeToCheck);
+            $type_content = $license_header->get_content_by_type($type_to_check);
             // Then we get the associated regx for the same type
-            $typeRegex = $licenseHeader->getRegexByType($typeToCheck);
+            $type_regex = $license_header->get_regex_by_type($type_to_check);
             // We check that the generated regex is able to match the generated content, or else we won't
             // be able to detect nor replace existing headers, meaning it will create duplicates
-            $this->assertTrue(preg_match($typeRegex, $typeContent) === 1);
+            $this->assertTrue(preg_match($type_regex, $type_content) === 1);
         }
     }
 
-    public static function getTypesToCheck(): iterable
+    public static function get_types_to_check(): iterable
     {
         yield ['vue'];
         yield ['html'];

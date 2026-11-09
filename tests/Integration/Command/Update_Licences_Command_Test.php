@@ -23,37 +23,37 @@ declare(strict_types=1);
 namespace Tests\Integration\Command;
 
 use PHPUnit\Framework\TestCase;
-use PrestaShop\HeaderStamp\Command\UpdateLicensesCommand;
+use Presta_Shop\Header_Stamp\Command\Update_Licenses_Command;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Finder\Finder;
-use Tests\Integration\Tools\FolderComparator;
+use Tests\Integration\Tools\Folder_Comparator;
 
-class UpdateLicencesCommandTest extends TestCase
+class Update_Licences_Command_Test extends TestCase
 {
-    private static $workspaceFolder;
+    private static $workspace_folder;
     private static $fs;
 
     public static function setUpBeforeClass(): void
     {
         parent::setUpBeforeClass();
-        self::$workspaceFolder = __DIR__ . '/../../Resources/workspace/';
-        self::cleanWorkspace();
+        self::$workspace_folder = __DIR__ . '/../../Resources/workspace/';
+        self::clean_workspace();
     }
 
     public static function tearDownAfterClass(): void
     {
         parent::tearDownAfterClass();
-        self::cleanWorkspace();
+        self::clean_workspace();
     }
 
-    protected static function cleanWorkspace(): void
+    protected static function clean_workspace(): void
     {
         // Remove and re-create folder to make it empty and existent
         self::$fs = new Filesystem();
         $finder = new Finder();
-        foreach ($finder->directories()->depth(1)->in(self::$workspaceFolder) as $directory) {
+        foreach ($finder->directories()->depth(1)->in(self::$workspace_folder) as $directory) {
             if (is_dir($directory->getRealPath())) {
                 self::$fs->remove($directory->getRealPath());
             }
@@ -61,115 +61,115 @@ class UpdateLicencesCommandTest extends TestCase
     }
 
     /**
-     * @dataProvider getFoldersToTest
+     * @dataProvider get_folders_to_test
      */
-    public function testCommandModifications(string $folderToTest, bool $isFolderValid, array $invalidFiles = [], string $discriminationParam = ''): void
+    public function test_command_modifications(string $folder_to_test, bool $is_folder_valid, array $invalid_files = [], string $discrimination_param = ''): void
     {
         // Prepare module workspace
-        $moduleSource = __DIR__ . '/../../Resources/module-samples/' . $folderToTest;
-        $moduleExpected = __DIR__ . '/../../Resources/expected/' . $folderToTest;
-        $moduleWorkspace = self::$workspaceFolder . $folderToTest;
-        if (is_dir($moduleWorkspace)) {
-            self::$fs->remove($moduleWorkspace);
+        $module_source = __DIR__ . '/../../Resources/module-samples/' . $folder_to_test;
+        $module_expected = __DIR__ . '/../../Resources/expected/' . $folder_to_test;
+        $module_workspace = self::$workspace_folder . $folder_to_test;
+        if (is_dir($module_workspace)) {
+            self::$fs->remove($module_workspace);
         }
-        self::$fs->mirror($moduleSource, $moduleWorkspace);
+        self::$fs->mirror($module_source, $module_workspace);
 
         // Execute command
         $application = new Application();
-        $application->add(new UpdateLicensesCommand());
+        $application->add(new Update_Licenses_Command());
         $command = $application->find('prestashop:licenses:update');
-        $commandTester = new CommandTester($command);
-        $commandParameters = [
+        $command_tester = new CommandTester($command);
+        $command_parameters = [
             '--license' => __DIR__ . '/../../../assets/afl.txt',
-            '--target' => $moduleWorkspace,
+            '--target' => $module_workspace,
             '--not-name' => '*.min.js',
             '--exclude' => 'ignoredFolder',
         ];
-        if (!empty($discriminationParam)) {
-            $commandParameters['--header-discrimination-string'] = $discriminationParam;
+        if (!empty($discrimination_param)) {
+            $command_parameters['--header-discrimination-string'] = $discrimination_param;
         }
 
-        $commandTester->execute($commandParameters);
+        $command_tester->execute($command_parameters);
 
         // Compare folders
-        $folderComparator = new FolderComparator();
-        $check = $folderComparator->compareFolders($moduleExpected, $moduleWorkspace);
-        $check2 = $folderComparator->compareFolders($moduleWorkspace, $moduleExpected);
+        $folder_comparator = new Folder_Comparator();
+        $check = $folder_comparator->compare_folders($module_expected, $module_workspace);
+        $check2 = $folder_comparator->compare_folders($module_workspace, $module_expected);
         $this->assertEquals([], $check);
         $this->assertEquals([], $check2);
 
         // Check the corrections based on the expected status of the module (to make sure fixtures are not broken)
-        $corrections = $folderComparator->compareFolders($moduleExpected, $moduleSource);
+        $corrections = $folder_comparator->compare_folders($module_expected, $module_source);
         sort($corrections);
 
         // Format expected messages based on file name list
-        $invalidFiles = array_map(static function (string $fileName): string {
-            return '/' . $fileName . ' has different md5';
-        }, $invalidFiles);
-        sort($invalidFiles);
-        $this->assertEquals($invalidFiles, $corrections);
+        $invalid_files = array_map(static function (string $file_name): string {
+            return '/' . $file_name . ' has different md5';
+        }, $invalid_files);
+        sort($invalid_files);
+        $this->assertEquals($invalid_files, $corrections);
 
         // If all is good we can already clean the workspace folder
-        self::$fs->remove($moduleWorkspace);
+        self::$fs->remove($module_workspace);
     }
 
     /**
-     * @dataProvider getFoldersToTest
+     * @dataProvider get_folders_to_test
      */
-    public function testCommandDryRun(string $folderToTest, bool $isFolderValid, array $invalidFiles = []): void
+    public function test_command_dry_run(string $folder_to_test, bool $is_folder_valid, array $invalid_files = []): void
     {
         // Prepare module workspace
-        $moduleSource = __DIR__ . '/../../Resources/module-samples/' . $folderToTest;
-        $moduleWorkspace = self::$workspaceFolder . $folderToTest;
-        if (is_dir($moduleWorkspace)) {
-            self::$fs->remove($moduleWorkspace);
+        $module_source = __DIR__ . '/../../Resources/module-samples/' . $folder_to_test;
+        $module_workspace = self::$workspace_folder . $folder_to_test;
+        if (is_dir($module_workspace)) {
+            self::$fs->remove($module_workspace);
         }
-        self::$fs->mirror($moduleSource, $moduleWorkspace);
+        self::$fs->mirror($module_source, $module_workspace);
 
         // Execute command
         $application = new Application();
-        $application->add(new UpdateLicensesCommand());
+        $application->add(new Update_Licenses_Command());
         $command = $application->find('prestashop:licenses:update');
-        $commandTester = new CommandTester($command);
-        $commandParameters = [
+        $command_tester = new CommandTester($command);
+        $command_parameters = [
             '--license' => __DIR__ . '/../../../assets/afl.txt',
-            '--target' => $moduleWorkspace,
+            '--target' => $module_workspace,
             '--not-name' => '*.min.js',
             '--exclude' => 'ignoredFolder',
             '--dry-run' => true,
         ];
-        if (!empty($discriminationParam)) {
-            $commandParameters['--header-discrimination-string'] = $discriminationParam;
+        if (!empty($discrimination_param)) {
+            $command_parameters['--header-discrimination-string'] = $discrimination_param;
         }
 
-        $commandResult = $commandTester->execute($commandParameters);
-        $this->assertEquals($isFolderValid ? 0 : 1, $commandResult);
+        $command_result = $command_tester->execute($command_parameters);
+        $this->assertEquals($is_folder_valid ? 0 : 1, $command_result);
 
-        $commandOutput = $commandTester->getDisplay();
-        if (!empty($invalidFiles)) {
+        $command_output = $command_tester->getDisplay();
+        if (!empty($invalid_files)) {
             // First find the fixed files block
             $matches = [];
-            $this->assertNotFalse(preg_match('/ Files with bad license headers:\n( \* [^\n]+\n)+/', $commandOutput, $matches));
+            $this->assertNotFalse(preg_match('/ Files with bad license headers:\n( \* [^\n]+\n)+/', $command_output, $matches));
             // Then extract the list from it
             $matches2 = [];
             preg_match_all('/( \* [^\n]+\n)/', $matches[0], $matches2);
-            $this->assertEquals(count($matches2[0]), count($invalidFiles));
-            $outputFiles = [];
+            $this->assertEquals(count($matches2[0]), count($invalid_files));
+            $output_files = [];
             foreach ($matches2[0] as $file) {
-                $outputFiles[] = str_replace(["\n", ' * '], '', $file);
+                $output_files[] = str_replace(["\n", ' * '], '', $file);
             }
-            sort($outputFiles);
-            sort($invalidFiles);
-            $this->assertEquals($outputFiles, $invalidFiles);
+            sort($output_files);
+            sort($invalid_files);
+            $this->assertEquals($output_files, $invalid_files);
         } else {
-            $this->assertFalse(str_contains($commandOutput, 'Files with bad license headers:'));
+            $this->assertFalse(str_contains($command_output, 'Files with bad license headers:'));
         }
 
         // If all is good we can already clean the workspace folder
-        self::$fs->remove($moduleWorkspace);
+        self::$fs->remove($module_workspace);
     }
 
-    public static function getFoldersToTest(): iterable
+    public static function get_folders_to_test(): iterable
     {
         // Contains most of the files to be fixed:
         // - files without headers
@@ -182,8 +182,8 @@ class UpdateLicencesCommandTest extends TestCase
             'fakemodule',
             false,
             [
-                'FakeClassWithoutHeader.php',
-                'FakeClassWithoutHeaderButComment.php',
+                'Fake_Class_Without_Header.php',
+                'Fake_Class_Without_Header_But_Comment.php',
                 'views/css/app.css',
                 'views/js/wrong_header.js',
                 'views/js/app.js',
@@ -196,7 +196,7 @@ class UpdateLicencesCommandTest extends TestCase
                 'views/templates/app.html.twig',
                 'views/templates/missing-header.vue',
                 'views/templates/wrong-osl-header.vue',
-                'FakeClassWithWrongHeader.php',
+                'Fake_Class_With_Wrong_Header.php',
                 'composer.json',
             ],
             // Use two discriminators (to check the implode works as expected)

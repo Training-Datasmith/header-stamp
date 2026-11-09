@@ -22,18 +22,18 @@ declare (strict_types=1);
 namespace Presta_Shop\Header_Stamp\Command;
 
 use Exception;
-use Php_Parser\Node\Stmt;
-use Php_Parser\Parser_Factory;
+use PhpParser\Node\Stmt;
+use PhpParser\ParserFactory;
 use Presta_Shop\Header_Stamp\License_Header;
 use Presta_Shop\Header_Stamp\Reporter;
 use Symfony\Component\Console\Command\Command;
-use Symfony\Component\Console\Helper\Progress_Bar;
-use Symfony\Component\Console\Input\Input_Interface;
-use Symfony\Component\Console\Input\Input_Option;
-use Symfony\Component\Console\Output\Output_Interface;
-use Symfony\Component\Console\Style\Symfony_Style;
+use Symfony\Component\Console\Helper\ProgressBar;
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
+use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\Finder\Finder;
-use Symfony\Component\Finder\Spl_File_Info;
+use Symfony\Component\Finder\SplFileInfo;
 use Symfony\Component\Yaml\Yaml;
 class Update_Licenses_Command extends Command
 {
@@ -41,7 +41,7 @@ class Update_Licenses_Command extends Command
     public const DEFAULT_CONFIG = ['extensions' => ['php', 'js', 'ts', 'css', 'scss', 'tpl', 'html.twig', 'json', 'vue'], 'excludedFiles' => ['vendor', 'node_modules'], 'notNamePatterns' => [], 'license' => __DIR__ . '/../../assets/osl3.txt', 'targetDirectory' => '', 'runAsDry' => false, 'displayReport' => false, 'discriminationString' => ['PrestaShop SA and Contributors', 'NOTICE OF LICENSE']];
     public const DEFAULT_CONFIG_FILE = '.header-stamp-config.yml';
     /**
-     * @var LicenseHeader
+     * @var License_Header
      */
     private $license_header;
     /**
@@ -101,9 +101,9 @@ class Update_Licenses_Command extends Command
         // We also define NO default values because they are already handled via the default config const,
         // and it's important to keep this separated for the override system to work properly (default < config
         // file < cli parameter)
-        $this->set_name('prestashop:licenses:update')->set_description('Rewrite your file headers to add the license or to make them up-to-date')->add_option('license', null, Input_Option::VALUE_REQUIRED, 'License file to apply')->add_option('target', null, Input_Option::VALUE_REQUIRED, 'Folder to work in (default: current dir)')->add_option('exclude', null, Input_Option::VALUE_REQUIRED, 'Comma-separated list of folders/files to exclude from the update')->add_option('not-name', null, Input_Option::VALUE_REQUIRED, 'Comma-separated list of file patterns to exclude from the update (ex: *.min.js)')->add_option('extensions', null, Input_Option::VALUE_REQUIRED, 'Comma-separated list of file extensions to update')->add_option('display-report', null, Input_Option::VALUE_NONE, 'Whether or not to display a report')->add_option('dry-run', null, Input_Option::VALUE_NONE, 'Dry-run mode does not modify files')->add_option('header-discrimination-string', null, Input_Option::VALUE_OPTIONAL, 'Fix existing licenses only if they contain that string (multiple values separated by comma are possible)')->add_option('config', null, Input_Option::VALUE_OPTIONAL, 'Use YAML config file instead of individual options');
+        $this->setName('prestashop:licenses:update')->setDescription('Rewrite your file headers to add the license or to make them up-to-date')->addOption('license', null, InputOption::VALUE_REQUIRED, 'License file to apply')->addOption('target', null, InputOption::VALUE_REQUIRED, 'Folder to work in (default: current dir)')->addOption('exclude', null, InputOption::VALUE_REQUIRED, 'Comma-separated list of folders/files to exclude from the update')->addOption('not-name', null, InputOption::VALUE_REQUIRED, 'Comma-separated list of file patterns to exclude from the update (ex: *.min.js)')->addOption('extensions', null, InputOption::VALUE_REQUIRED, 'Comma-separated list of file extensions to update')->addOption('display-report', null, InputOption::VALUE_NONE, 'Whether or not to display a report')->addOption('dry-run', null, InputOption::VALUE_NONE, 'Dry-run mode does not modify files')->addOption('header-discrimination-string', null, InputOption::VALUE_OPTIONAL, 'Fix existing licenses only if they contain that string (multiple values separated by comma are possible)')->addOption('config', null, InputOption::VALUE_OPTIONAL, 'Use YAML config file instead of individual options');
     }
-    protected function initialize(Input_Interface $input, Output_Interface $output): void
+    protected function initialize(InputInterface $input, OutputInterface $output): void
     {
         $file_config = $this->get_config_from_file($input);
         $token_config = $this->get_token_config($input);
@@ -173,13 +173,13 @@ class Update_Licenses_Command extends Command
      *
      * @return array{extensions?: string[], excludedFiles?: string[], notNamePatterns?: string[], license?: string, targetDirectory?: string, runAsDry?: bool, displayReport?: bool, discriminationString?: string[]}
      */
-    protected function get_token_config(Input_Interface $input): array
+    protected function get_token_config(InputInterface $input): array
     {
         $token_config = [];
         foreach (self::CONFIG_PARAMETERS_MAPPING as $config_parameter => $cli_parameter) {
             // Only keep parameters that are explicitly specified as CLI parameters
-            if ($input->has_parameter_option('--' . $cli_parameter)) {
-                $token_config[$config_parameter] = $input->get_option($cli_parameter);
+            if ($input->hasParameterOption('--' . $cli_parameter)) {
+                $token_config[$config_parameter] = $input->getOption($cli_parameter);
             }
         }
         return $token_config;
@@ -193,13 +193,13 @@ class Update_Licenses_Command extends Command
      *
      * @return array{extensions?: string, excludedFiles?: string, notNamePatterns?: string, license?: string, targetDirectory?: string, runAsDry?: bool, displayReport?: bool, discriminationString?: string}
      */
-    protected function get_config_from_file(Input_Interface $input): array
+    protected function get_config_from_file(InputInterface $input): array
     {
         $config_from_file = [];
         $config_file = null;
         // When config is explicitly passed the file MUST exist
-        if ($input->has_parameter_option('--config')) {
-            $config_file = $input->get_option('config');
+        if ($input->hasParameterOption('--config')) {
+            $config_file = $input->getOption('config');
             if (!file_exists($config_file)) {
                 throw new \RuntimeException(sprintf('The config file "%s" was not found', $config_file));
             }
@@ -223,7 +223,7 @@ class Update_Licenses_Command extends Command
         }
         return $config_from_file;
     }
-    protected function execute(Input_Interface $input, Output_Interface $output): int
+    protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $this->license_header = new License_Header($this->license);
         $this->reporter = new Reporter();
@@ -242,29 +242,29 @@ class Update_Licenses_Command extends Command
         }
         return 0;
     }
-    private function find_and_check_extension(Output_Interface $output, string $ext): void
+    private function find_and_check_extension(OutputInterface $output, string $ext): void
     {
         if (!is_dir($this->target_directory)) {
             throw new \Exception('Could not get target directory. Check your permissions.');
         }
         $finder = new Finder();
-        $finder->files()->name('*.' . $ext)->in($this->target_directory)->exclude($this->excluded_files)->not_path($this->excluded_files)->not_name($this->not_name_patterns);
-        $parser = (new Parser_Factory())->create(Parser_Factory::PREFER_PHP7);
+        $finder->files()->name('*.' . $ext)->in($this->target_directory)->exclude($this->excluded_files)->notPath($this->excluded_files)->notName($this->not_name_patterns);
+        $parser = (new ParserFactory())->create(ParserFactory::PREFER_PHP7);
         $output->writeln('Updating license in ' . strtoupper($ext) . ' files ...');
-        $progress = new Progress_Bar($output, count($finder));
+        $progress = new ProgressBar($output, count($finder));
         $progress->start();
-        $progress->set_redraw_frequency(20);
+        $progress->setRedrawFrequency(20);
         foreach ($finder as $file) {
-            switch ($file->get_extension()) {
+            switch ($file->getExtension()) {
                 case 'php':
                     try {
-                        $nodes = $parser->parse($file->get_contents());
+                        $nodes = $parser->parse($file->getContents());
                         if ($nodes !== null && count($nodes)) {
                             $this->add_license_to_node($nodes[0], $file);
                         }
-                    } catch (\Php_Parser\Error $exception) {
-                        $output->writeln('Syntax error on file ' . $file->get_relative_pathname() . '. Continue ...');
-                        $this->reporter->report_license_could_not_be_fixed($file->get_filename());
+                    } catch (\PhpParser\Error $exception) {
+                        $output->writeln('Syntax error on file ' . $file->getRelativePathname() . '. Continue ...');
+                        $this->reporter->report_license_could_not_be_fixed($file->getFilename());
                     }
                     break;
                 case 'js':
@@ -274,7 +274,7 @@ class Update_Licenses_Command extends Command
                 case 'vue':
                 case 'html':
                 case 'tpl':
-                    $this->add_license_to_file($file, $this->license_header->get_regex_by_type($file->get_extension()));
+                    $this->add_license_to_file($file, $this->license_header->get_regex_by_type($file->getExtension()));
                     break;
                 case 'twig':
                     $this->add_license_to_twig_template($file);
@@ -288,12 +288,12 @@ class Update_Licenses_Command extends Command
         $progress->finish();
         $output->writeln('');
     }
-    private function add_license_to_file(Spl_File_Info $file, string $regex): void
+    private function add_license_to_file(SplFileInfo $file, string $regex): void
     {
-        $content = $file->get_contents();
+        $content = $file->getContents();
         $old_content = $content;
         $matches = [];
-        $text = $this->license_header->get_content_by_type($file->get_extension());
+        $text = $this->license_header->get_content_by_type($file->getExtension());
         // Try to find an existing license
         preg_match($regex, $content, $matches);
         $found_license_comment = false;
@@ -311,24 +311,24 @@ class Update_Licenses_Command extends Command
             $content = $text . "\n" . $content;
         }
         if (!$this->run_as_dry) {
-            file_put_contents($this->target_directory . '/' . $file->get_relative_pathname(), $content);
+            file_put_contents($this->target_directory . '/' . $file->getRelativePathname(), $content);
         }
-        $this->report_operation_result($content, $old_content, $file->get_relative_pathname());
+        $this->report_operation_result($content, $old_content, $file->getRelativePathname());
     }
-    private function add_license_to_node(Stmt $node, Spl_File_Info $file): void
+    private function add_license_to_node(Stmt $node, SplFileInfo $file): void
     {
-        if (!$node->has_attribute('comments')) {
+        if (!$node->hasAttribute('comments')) {
             $this->prepend_in_php_file($file);
             return;
         }
-        $comments = $node->get_attribute('comments');
+        $comments = $node->getAttribute('comments');
         foreach ($comments as $comment) {
-            if ($comment instanceof \Php_Parser\Comment && $this->is_license_comment($comment->get_text())) {
-                $new_content = str_replace($comment->get_text(), $this->license_header->get_content_by_type('php'), $file->get_contents());
+            if ($comment instanceof \PhpParser\Comment && $this->is_license_comment($comment->getText())) {
+                $new_content = str_replace($comment->getText(), $this->license_header->get_content_by_type('php'), $file->getContents());
                 if (!$this->run_as_dry) {
-                    file_put_contents($this->target_directory . '/' . $file->get_relative_pathname(), $new_content);
+                    file_put_contents($this->target_directory . '/' . $file->getRelativePathname(), $new_content);
                 }
-                $this->report_operation_result($new_content, $file->get_contents(), $file->get_relative_pathname());
+                $this->report_operation_result($new_content, $file->getContents(), $file->getRelativePathname());
                 return;
             }
         }
@@ -344,11 +344,11 @@ class Update_Licenses_Command extends Command
         }
         return false;
     }
-    private function prepend_in_php_file(Spl_File_Info $file): void
+    private function prepend_in_php_file(SplFileInfo $file): void
     {
         $needle = '<?php';
         $replace = "<?php\n" . $this->license_header->get_content_by_type('php');
-        $haystack = $file->get_contents();
+        $haystack = $file->getContents();
         $pos = strpos($haystack, $needle);
         // Important, if the <?php is in the middle of the file, continue
         if ($pos === 0) {
@@ -360,14 +360,14 @@ class Update_Licenses_Command extends Command
             }
             $newstring = substr_replace($haystack, $replace, $pos, strlen($needle));
             if (!$this->run_as_dry) {
-                file_put_contents($this->target_directory . '/' . $file->get_relative_pathname(), $newstring);
+                file_put_contents($this->target_directory . '/' . $file->getRelativePathname(), $newstring);
             }
-            $this->report_operation_result($newstring, $haystack, $file->get_relative_pathname());
+            $this->report_operation_result($newstring, $haystack, $file->getRelativePathname());
         }
     }
-    private function add_license_to_twig_template(Spl_File_Info $file): void
+    private function add_license_to_twig_template(SplFileInfo $file): void
     {
-        $file_content = $file->get_contents();
+        $file_content = $file->getContents();
         $regexp_candidates = [
             // For a short moment v9 had some twig headers a bit wrongly written with extra spaces because of automatic
             // changes made by the new linter This special cas aims at fixing those
@@ -389,15 +389,15 @@ class Update_Licenses_Command extends Command
     /**
      * @throws Exception
      */
-    private function add_license_to_json_file(Spl_File_Info $file): void
+    private function add_license_to_json_file(SplFileInfo $file): void
     {
-        if (!in_array($file->get_filename(), ['composer.json', 'package.json'])) {
+        if (!in_array($file->getFilename(), ['composer.json', 'package.json'])) {
             return;
         }
-        $content = json_decode($file->get_contents(), true);
+        $content = json_decode($file->getContents(), true);
         $author_details = ['name' => 'PrestaShop SA', 'email' => 'contact@prestashop.com'];
         // update author information depending of file
-        if ('composer.json' === $file->get_filename()) {
+        if ('composer.json' === $file->getFilename()) {
             $content['authors'] = [$author_details];
         } else {
             // package.json
@@ -413,9 +413,9 @@ class Update_Licenses_Command extends Command
             $encoded_content .= "\n";
         }
         if (!$this->run_as_dry) {
-            file_put_contents($this->target_directory . '/' . $file->get_relative_pathname(), $encoded_content);
+            file_put_contents($this->target_directory . '/' . $file->getRelativePathname(), $encoded_content);
         }
-        $this->report_operation_result($encoded_content, $file->get_contents(), $file->get_relative_pathname());
+        $this->report_operation_result($encoded_content, $file->getContents(), $file->getRelativePathname());
     }
     private function report_operation_result(string $new_file_content, string $old_file_content, string $filename): void
     {
@@ -425,9 +425,9 @@ class Update_Licenses_Command extends Command
             $this->reporter->report_license_was_fine($filename);
         }
     }
-    private function print_pretty_report(Input_Interface $input, Output_Interface $output): void
+    private function print_pretty_report(InputInterface $input, OutputInterface $output): void
     {
-        $style = new Symfony_Style($input, $output);
+        $style = new SymfonyStyle($input, $output);
         $style->section('Header Stamp Report');
         $report = $this->reporter->get_report();
         $sections = ['fixed', 'nothing to fix', 'failed'];
@@ -439,9 +439,9 @@ class Update_Licenses_Command extends Command
             $style->listing($report[$section]);
         }
     }
-    private function print_dry_run_pretty_report(Input_Interface $input, Output_Interface $output): void
+    private function print_dry_run_pretty_report(InputInterface $input, OutputInterface $output): void
     {
-        $style = new Symfony_Style($input, $output);
+        $style = new SymfonyStyle($input, $output);
         $style->section('Header Stamp Dry Run Report');
         $report = $this->reporter->get_report();
         if (!empty($report['fixed'])) {

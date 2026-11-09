@@ -47,13 +47,13 @@ Available options:
 Install dependencies with composer. Two CI tools are configured for this project: php-cs-fixer and phpstan
 
 ```
-composer install
-php vendor/bin/php-cs-fixer fix --no-interaction --dry-run --diff
+composer update --no-interaction --prefer-dist --prefer-stable
+bash scripts/system-test.sh
 php vendor/bin/phpstan analyse --configuration=tests/phpstan/phpstan.neon
 ```
 
 Before submitting changes to the projects, tests can be run with:
 
 ```
-php tests/integration/runner/run.php
+composer test
 ```

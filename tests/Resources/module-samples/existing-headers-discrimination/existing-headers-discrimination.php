@@ -1,6 +1,4 @@
 <?php
-
-declare(strict_types=1);
 /**
  * With the new option this header will be fixed.
  *
@@ -12,4 +10,5 @@ declare(strict_types=1);
 
 class existingHeaderDiscrimination extends Module
 {
+
 }

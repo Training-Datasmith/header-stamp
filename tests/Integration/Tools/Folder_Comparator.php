@@ -25,7 +25,7 @@ namespace Tests\Integration\Tools;
 /**
  * @see https://github.com/sureshdotariya/folder-compare/
  */
-class FolderComparator
+class Folder_Comparator
 {
     private $blacklist = [
         '.',
@@ -39,48 +39,48 @@ class FolderComparator
     ];
 
     /**
-     * @param $folderA
-     * @param $folderB
-     * @param $basePath
+     * @param string $folder_a
+     * @param string $folder_b
+     * @param string $base_path
      *
-     * @return array list of items that differ
+     * @return array<int, string> list of items that differ
      */
-    public function compareFolders($folderA, $folderB, $basePath = '')
+    public function compare_folders($folder_a, $folder_b, $base_path = '')
     {
-        $itemsDiffer = [];
-        $handle = opendir($folderA);
+        $items_differ = [];
+        $handle = opendir($folder_a);
 
         while (($file = readdir($handle)) !== false) {
             if (in_array($file, $this->blacklist)) {
                 continue;
             }
 
-            $fileA = $folderA . DIRECTORY_SEPARATOR . $file;
-            $fileB = $folderB . DIRECTORY_SEPARATOR . $file;
-            $fullPath = $basePath . DIRECTORY_SEPARATOR . $file;
+            $file_a = $folder_a . DIRECTORY_SEPARATOR . $file;
+            $file_b = $folder_b . DIRECTORY_SEPARATOR . $file;
+            $full_path = $base_path . DIRECTORY_SEPARATOR . $file;
 
-            if (is_file($fileA)) {
-                if (!file_exists($fileB)) {
-                    $itemsDiffer[] = $fullPath . ' is missing';
+            if (is_file($file_a)) {
+                if (!file_exists($file_b)) {
+                    $items_differ[] = $full_path . ' is missing';
                 } else {
-                    if (is_file($fileB)) {
-                        if (md5_file($fileA) !== md5_file($fileB)) {
-                            $itemsDiffer[] = $fullPath . ' has different md5';
+                    if (is_file($file_b)) {
+                        if (md5_file($file_a) !== md5_file($file_b)) {
+                            $items_differ[] = $full_path . ' has different md5';
                         }
-                    } elseif (is_dir($fileB)) {
-                        $itemsDiffer[] = $fullPath . ' is once a dir, once a file';
+                    } elseif (is_dir($file_b)) {
+                        $items_differ[] = $full_path . ' is once a dir, once a file';
                     }
                 }
             } else {
-                $itemsDiffer = array_merge(
-                    $itemsDiffer,
-                    $this->compareFolders($fileA, $fileB, $fullPath)
+                $items_differ = array_merge(
+                    $items_differ,
+                    $this->compare_folders($file_a, $file_b, $full_path)
                 );
             }
         }
 
         closedir($handle);
 
-        return $itemsDiffer;
+        return $items_differ;
     }
 }
