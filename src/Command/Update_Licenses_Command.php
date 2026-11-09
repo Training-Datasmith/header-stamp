@@ -260,7 +260,7 @@ class Update_Licenses_Command extends Command
                     try {
                         $nodes = $parser->parse($file->getContents());
                         if ($nodes !== null && count($nodes)) {
-                            $this->add_license_to_node($nodes[0], $file);
+                            $this->add_license_to_nodes($nodes, $file);
                         }
                     } catch (\PhpParser\Error $exception) {
                         $output->writeln('Syntax error on file ' . $file->getRelativePathname() . '. Continue ...');
@@ -315,24 +315,28 @@ class Update_Licenses_Command extends Command
         }
         $this->report_operation_result($content, $old_content, $file->getRelativePathname());
     }
-    private function add_license_to_node(Stmt $node, SplFileInfo $file): void
+    /**
+     * @param list<Stmt> $nodes
+     */
+    private function add_license_to_nodes(array $nodes, SplFileInfo $file): void
     {
-        if (!$node->hasAttribute('comments')) {
-            $this->prepend_in_php_file($file);
-            return;
-        }
-        $comments = $node->getAttribute('comments');
-        foreach ($comments as $comment) {
-            if ($comment instanceof \PhpParser\Comment && $this->is_license_comment($comment->getText())) {
-                $new_content = str_replace($comment->getText(), $this->license_header->get_content_by_type('php'), $file->getContents());
-                if (!$this->run_as_dry) {
-                    file_put_contents($this->target_directory . '/' . $file->getRelativePathname(), $new_content);
+        foreach ($nodes as $node) {
+            if (!$node->hasAttribute('comments')) {
+                continue;
+            }
+            $comments = $node->getAttribute('comments');
+            foreach ($comments as $comment) {
+                if ($comment instanceof \PhpParser\Comment && $this->is_license_comment($comment->getText())) {
+                    $new_content = str_replace($comment->getText(), $this->license_header->get_content_by_type('php'), $file->getContents());
+                    if (!$this->run_as_dry) {
+                        file_put_contents($this->target_directory . '/' . $file->getRelativePathname(), $new_content);
+                    }
+                    $this->report_operation_result($new_content, $file->getContents(), $file->getRelativePathname());
+
+                    return;
                 }
-                $this->report_operation_result($new_content, $file->getContents(), $file->getRelativePathname());
-                return;
             }
         }
-        // No comment was replaced so we prepend the license
         $this->prepend_in_php_file($file);
     }
     private function is_license_comment(string $comment_content): bool
@@ -347,23 +351,35 @@ class Update_Licenses_Command extends Command
     private function prepend_in_php_file(SplFileInfo $file): void
     {
         $needle = '<?php';
-        $replace = "<?php\n" . $this->license_header->get_content_by_type('php');
+        $license = $this->license_header->get_content_by_type('php');
         $haystack = $file->getContents();
         $pos = strpos($haystack, $needle);
-        // Important, if the <?php is in the middle of the file, continue
-        if ($pos === 0) {
-            // Check if an empty newline is present right after the <?php tag
-            // Append newline to replacement if missing
-            $check_newline = substr($haystack, strlen($needle), 2) === "\n\n";
-            if (!$check_newline) {
-                $replace .= "\n";
-            }
-            $newstring = substr_replace($haystack, $replace, $pos, strlen($needle));
-            if (!$this->run_as_dry) {
-                file_put_contents($this->target_directory . '/' . $file->getRelativePathname(), $newstring);
-            }
-            $this->report_operation_result($newstring, $haystack, $file->getRelativePathname());
+        if ($pos !== 0) {
+            return;
         }
+        $after_php = strlen($needle);
+        if (substr($haystack, $after_php, 1) === "\r") {
+            ++$after_php;
+        }
+        if (substr($haystack, $after_php, 1) === "\n") {
+            ++$after_php;
+        }
+        $head = substr($haystack, 0, $after_php);
+        $tail = substr($haystack, $after_php);
+        $declare_prefix = '';
+        if (preg_match('/^(declare\s*\(\s*strict_types\s*=\s*1\s*\)\s*;\s*\r?\n)/', $tail, $declare_match) === 1) {
+            $declare_prefix = $declare_match[1];
+            $tail = substr($tail, strlen($declare_match[1]));
+        }
+        $license_block = $license . "\n";
+        if ($declare_prefix === '' && $tail !== '' && $tail[0] !== "\n") {
+            $license_block .= "\n";
+        }
+        $newstring = $head . $license_block . $declare_prefix . $tail;
+        if (!$this->run_as_dry) {
+            file_put_contents($this->target_directory . '/' . $file->getRelativePathname(), $newstring);
+        }
+        $this->report_operation_result($newstring, $haystack, $file->getRelativePathname());
     }
     private function add_license_to_twig_template(SplFileInfo $file): void
     {

@@ -1,5 +1,23 @@
 <?php
 
+/**
+ * Copyright since 2007 PrestaShop SA and Contributors
+ * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
+ *
+ * NOTICE OF LICENSE
+ *
+ * This source file is subject to the Academic Free License version 3.0
+ * that is bundled with this package in the file LICENSE.md.
+ * It is also available through the world-wide-web at this URL:
+ * https://opensource.org/licenses/AFL-3.0
+ * If you did not receive a copy of the license and are unable to
+ * obtain it through the world-wide-web, please send an email
+ * to license@prestashop.com so we can send you a copy immediately.
+ *
+ * @author    PrestaShop SA and Contributors <contact@prestashop.com>
+ * @copyright Since 2007 PrestaShop SA and Contributors
+ * @license   https://opensource.org/licenses/AFL-3.0 Academic Free License version 3.0
+ */
 declare(strict_types=1);
 
 $root = dirname(__DIR__);
@@ -12,46 +30,74 @@ $scan_roots = [
     'tests',
 ];
 
-/** @var array<string, list<string>> site => list of Class::method */
+/** @var array<string, list<string>> path relative to repo root => list of Class::method */
 $allowlist = [
-    'global' => [
+    'demo/allowed.php' => [
+        'Symfony\\Component\\Finder\\SplFileInfo::getContents',
+    ],
+    'bin/header-stamp' => [
+        'Symfony\\Component\\Console\\Application::add',
+        'Symfony\\Component\\Console\\Application::setDefaultCommand',
+        'Symfony\\Component\\Console\\Application::run',
+        'Symfony\\Component\\Console\\Command\\Command::getName',
+    ],
+    'src/Command/Update_Licenses_Command.php' => [
         'Symfony\\Component\\Console\\Command\\Command::setName',
         'Symfony\\Component\\Console\\Command\\Command::setDescription',
         'Symfony\\Component\\Console\\Command\\Command::addOption',
-        'Symfony\\Component\\Console\\Command\\Command::getName',
         'Symfony\\Component\\Console\\Input\\InputInterface::hasParameterOption',
         'Symfony\\Component\\Console\\Input\\InputInterface::getOption',
+        'Symfony\\Component\\Console\\Output\\OutputInterface::writeln',
+        'Symfony\\Component\\Finder\\Finder::files',
+        'Symfony\\Component\\Finder\\Finder::name',
+        'Symfony\\Component\\Finder\\Finder::in',
+        'Symfony\\Component\\Finder\\Finder::exclude',
         'Symfony\\Component\\Finder\\Finder::notPath',
         'Symfony\\Component\\Finder\\Finder::notName',
         'Symfony\\Component\\Finder\\SplFileInfo::getExtension',
         'Symfony\\Component\\Finder\\SplFileInfo::getContents',
         'Symfony\\Component\\Finder\\SplFileInfo::getRelativePathname',
         'Symfony\\Component\\Finder\\SplFileInfo::getFilename',
-        'Symfony\\Component\\Finder\\SplFileInfo::getRealPath',
         'Symfony\\Component\\Console\\Helper\\ProgressBar::setRedrawFrequency',
+        'Symfony\\Component\\Console\\Helper\\ProgressBar::start',
+        'Symfony\\Component\\Console\\Helper\\ProgressBar::advance',
+        'Symfony\\Component\\Console\\Helper\\ProgressBar::finish',
         'Symfony\\Component\\Console\\Style\\SymfonyStyle::section',
         'Symfony\\Component\\Console\\Style\\SymfonyStyle::text',
         'Symfony\\Component\\Console\\Style\\SymfonyStyle::listing',
-        'Symfony\\Component\\Console\\Application::add',
-        'Symfony\\Component\\Console\\Application::find',
-        'Symfony\\Component\\Console\\Application::setDefaultCommand',
-        'Symfony\\Component\\Console\\Application::run',
-        'Symfony\\Component\\Console\\Tester\\CommandTester::execute',
-        'Symfony\\Component\\Console\\Tester\\CommandTester::getDisplay',
-        'Symfony\\Component\\Filesystem\\Filesystem::remove',
-        'Symfony\\Component\\Filesystem\\Filesystem::mirror',
         'PhpParser\\ParserFactory::create',
         'PhpParser\\Node::hasAttribute',
         'PhpParser\\Node::getAttribute',
         'PhpParser\\Comment::getText',
+        'Symfony\\Component\\Finder\\SplFileInfo::getContents',
+    ],
+    'tests/Integration/Command/Update_Licences_Command_Test.php' => [
         'PHPUnit\\Framework\\TestCase::assertEquals',
-        'PHPUnit\\Framework\\TestCase::assertTrue',
-        'PHPUnit\\Framework\\TestCase::assertFalse',
         'PHPUnit\\Framework\\TestCase::assertNotFalse',
+        'PHPUnit\\Framework\\TestCase::assertFalse',
         'PHPUnit\\Framework\\TestCase::setUpBeforeClass',
         'PHPUnit\\Framework\\TestCase::tearDownAfterClass',
-        'Tests\\Integration\\Command\\Update_Licences_Command_Test::setUpBeforeClass',
-        'Tests\\Integration\\Command\\Update_Licences_Command_Test::tearDownAfterClass',
+        'Symfony\\Component\\Console\\Application::add',
+        'Symfony\\Component\\Console\\Application::find',
+        'Symfony\\Component\\Console\\Tester\\CommandTester::execute',
+        'Symfony\\Component\\Console\\Tester\\CommandTester::getDisplay',
+        'Symfony\\Component\\Filesystem\\Filesystem::remove',
+        'Symfony\\Component\\Filesystem\\Filesystem::mirror',
+        'Symfony\\Component\\Finder\\Finder::directories',
+        'Symfony\\Component\\Finder\\Finder::depth',
+        'Symfony\\Component\\Finder\\Finder::in',
+        'Symfony\\Component\\Finder\\SplFileInfo::getRealPath',
+    ],
+    'tests/Unit/License_Header_Test.php' => [
+        'PHPUnit\\Framework\\TestCase::assertEquals',
+        'PHPUnit\\Framework\\TestCase::assertTrue',
+        'ReflectionClass::getMethod',
+        'ReflectionClass::getProperty',
+        'ReflectionProperty::setAccessible',
+        'ReflectionProperty::setValue',
+        'ReflectionProperty::getValue',
+        'ReflectionMethod::setAccessible',
+        'ReflectionMethod::invoke',
     ],
 ];
 
@@ -153,14 +199,43 @@ function has_camel_hump(string $name): bool
     return false;
 }
 
-function is_allowlisted_call(string $class, string $method, array $allowlist): bool
+function normalize_site(string $site): string
 {
+    return str_replace('\\', '/', $site);
+}
+
+function site_from_path(string $path, string $root): string
+{
+    $path = normalize_site($path);
+    $root = rtrim(normalize_site($root), '/');
+    if (strpos($path, $root . '/') === 0) {
+        return substr($path, strlen($root) + 1);
+    }
+
+    return $path;
+}
+
+function is_allowlisted_call(string $site, string $class, string $method, array $allowlist): bool
+{
+    $site = normalize_site($site);
     $key = $class . '::' . $method;
-    foreach ($allowlist as $site => $entries) {
-        foreach ($entries as $entry) {
-            if ($entry === $key) {
-                return true;
-            }
+    if (!isset($allowlist[$site])) {
+        return false;
+    }
+
+    return in_array($key, $allowlist[$site], true);
+}
+
+function is_method_allowlisted_on_site(string $site, string $method, array $allowlist): bool
+{
+    $site = normalize_site($site);
+    if (!isset($allowlist[$site])) {
+        return false;
+    }
+    $suffix = '::' . $method;
+    foreach ($allowlist[$site] as $entry) {
+        if (strlen($entry) >= strlen($suffix) && substr($entry, -strlen($suffix)) === $suffix) {
+            return true;
         }
     }
 
@@ -195,6 +270,35 @@ function inheritance_allowlist_bases(string $fqcn): array
     }
 
     return $bases;
+}
+
+function guess_receiver_from_variable(string $var, array $uses): string
+{
+    $key = ltrim($var, '$');
+    if (isset($uses[$key])) {
+        return $uses[$key];
+    }
+    $hints = [
+        'output' => 'Symfony\\Component\\Console\\Output\\OutputInterface',
+        'input' => 'Symfony\\Component\\Console\\Input\\InputInterface',
+        'progress' => 'Symfony\\Component\\Console\\Helper\\ProgressBar',
+        'style' => 'Symfony\\Component\\Console\\Style\\SymfonyStyle',
+        'command' => 'Symfony\\Component\\Console\\Command\\Command',
+        'command_tester' => 'Symfony\\Component\\Console\\Tester\\CommandTester',
+        'finder' => 'Symfony\\Component\\Finder\\Finder',
+        'file' => 'Symfony\\Component\\Finder\\SplFileInfo',
+        'directory' => 'Symfony\\Component\\Finder\\SplFileInfo',
+        'fs' => 'Symfony\\Component\\Filesystem\\Filesystem',
+        'rc' => 'ReflectionClass',
+        'rm' => 'ReflectionMethod',
+        'rp' => 'ReflectionProperty',
+        'rep' => 'Presta_Shop\\Header_Stamp\\Reporter',
+        'node' => 'PhpParser\\Node',
+        'comment' => 'PhpParser\\Comment',
+        'parser' => 'PhpParser\\Parser',
+    ];
+
+    return $hints[$key] ?? '';
 }
 
 function resolve_object_call_receiver(array $tokens, int $op_index, string $namespace, string $class, array $uses): string
@@ -258,7 +362,7 @@ function scan_forbidden_tokens(string $file, string $contents, array $forbidden_
 /**
  * @param list<string> $failures
  */
-function scan_php_tokens(string $file, string $contents, array $allowlist, array $magic_methods, array &$failures): void
+function scan_php_tokens(string $site, string $contents, array $allowlist, array $magic_methods, array &$failures): void
 {
     $tokens = token_get_all($contents);
     $count = count($tokens);
@@ -293,7 +397,7 @@ function scan_php_tokens(string $file, string $contents, array $allowlist, array
                     $class = $tokens[$j][1];
                     if (strpos($namespace, 'Presta_Shop\\') === 0 || strpos($namespace, 'Tests\\') === 0) {
                         if (has_camel_hump($class)) {
-                            $failures[] = sprintf('%s: repo-owned camelCase class %s', $file, $class);
+                            $failures[] = sprintf('%s: repo-owned camelCase class %s', $site, $class);
                         }
                     }
                     break;
@@ -345,14 +449,14 @@ function scan_php_tokens(string $file, string $contents, array $allowlist, array
             }
             if ($fn !== '' && !in_array($fn, $magic_methods, true)) {
                 if ((strpos($namespace, 'Presta_Shop\\') === 0 || strpos($namespace, 'Tests\\') === 0) && has_camel_hump($fn)) {
-                    $failures[] = sprintf('%s: repo-owned camelCase function %s', $file, $fn);
+                    $failures[] = sprintf('%s: repo-owned camelCase function %s', $site, $fn);
                 }
             }
         }
 
         if ($id === T_VARIABLE && preg_match('/^\$[a-z]+[A-Z]/', $text)) {
-            if (strpos($file, '/tests/Resources/') === false) {
-                $failures[] = sprintf('%s: repo-owned camelCase variable %s', $file, $text);
+            if (strpos($site, 'tests/Resources/') === false) {
+                $failures[] = sprintf('%s: repo-owned camelCase variable %s', $site, $text);
             }
         }
 
@@ -362,12 +466,12 @@ function scan_php_tokens(string $file, string $contents, array $allowlist, array
                 $method = $tokens[$i + 2][1];
             }
             if ($method !== '' && has_camel_hump($method)) {
-                if (!is_allowlisted_call('PHPUnit\\Framework\\TestCase', $method, $allowlist)
-                    && !is_allowlisted_call($namespace . '\\' . $class, $method, $allowlist)
+                if (!is_allowlisted_call($site, 'PHPUnit\\Framework\\TestCase', $method, $allowlist)
+                    && !is_allowlisted_call($site, $namespace . '\\' . $class, $method, $allowlist)
                     && !in_array($method, $magic_methods, true)) {
                     if (strpos($namespace, 'Tests\\') === 0) {
                         $fq = $namespace . '\\' . $class . '::' . $method;
-                        $failures[] = sprintf('%s: unallowlisted parent call %s', $file, $fq);
+                        $failures[] = sprintf('%s: unallowlisted parent call %s', $site, $fq);
                     }
                 }
             }
@@ -380,17 +484,33 @@ function scan_php_tokens(string $file, string $contents, array $allowlist, array
             }
             $resolved_receiver = resolve_object_call_receiver($tokens, $i, $namespace, $class, $uses);
             if ($resolved_receiver === '') {
+                $var = '';
+                for ($k = $i - 1; $k >= 0; --$k) {
+                    if (is_array($tokens[$k]) && $tokens[$k][0] === T_VARIABLE) {
+                        $var = $tokens[$k][1];
+                        break;
+                    }
+                }
+                if ($var !== '') {
+                    $resolved_receiver = guess_receiver_from_variable($var, $uses);
+                }
+            }
+            if ($resolved_receiver === '' && is_method_allowlisted_on_site($site, $method, $allowlist)) {
+                continue;
+            }
+            if ($resolved_receiver === '') {
+                $failures[] = sprintf('%s: unresolved camelCase method call %s', $site, $method);
                 continue;
             }
 
             $allowed = false;
             foreach (inheritance_allowlist_bases($resolved_receiver) as $base) {
-                if (is_allowlisted_call($base, $method, $allowlist)) {
+                if (is_allowlisted_call($site, $base, $method, $allowlist)) {
                     $allowed = true;
                     break;
                 }
             }
-            if ($allowed || is_allowlisted_call($resolved_receiver, $method, $allowlist)) {
+            if ($allowed || is_allowlisted_call($site, $resolved_receiver, $method, $allowlist)) {
                 continue;
             }
 
@@ -398,9 +518,41 @@ function scan_php_tokens(string $file, string $contents, array $allowlist, array
                 || strpos($resolved_receiver, 'PhpParser\\') === 0
                 || strpos($resolved_receiver, 'PHPUnit\\') === 0
             ) {
-                $failures[] = sprintf('%s: unallowlisted third-party call %s::%s', $file, $resolved_receiver, $method);
+                $failures[] = sprintf('%s: unallowlisted third-party call %s::%s', $site, $resolved_receiver, $method);
             } elseif (strpos($resolved_receiver, 'Presta_Shop\\') === 0 || strpos($resolved_receiver, 'Tests\\') === 0) {
-                $failures[] = sprintf('%s: repo-owned camelCase method call %s::%s', $file, $resolved_receiver, $method);
+                $failures[] = sprintf('%s: repo-owned camelCase method call %s::%s', $site, $resolved_receiver, $method);
+            }
+        }
+
+        if ($id === T_STRING && isset($tokens[$i + 1], $tokens[$i + 2])
+            && $tokens[$i + 1] === '::'
+            && is_array($tokens[$i + 2])
+            && $tokens[$i + 2][0] === T_STRING) {
+            $static_method = $tokens[$i + 2][1];
+            if (!has_camel_hump($static_method) || in_array($static_method, $magic_methods, true)) {
+                continue;
+            }
+            $static_class = $text;
+            if (isset($uses[$static_class])) {
+                $static_class = $uses[$static_class];
+            } elseif (strpos($static_class, '\\') === false && $namespace !== '') {
+                $static_class = $namespace . '\\' . $static_class;
+            }
+            if (is_allowlisted_call($site, $static_class, $static_method, $allowlist)) {
+                continue;
+            }
+            foreach (inheritance_allowlist_bases($static_class) as $base) {
+                if (is_allowlisted_call($site, $base, $static_method, $allowlist)) {
+                    continue 2;
+                }
+            }
+            if (strpos($static_class, 'Presta_Shop\\') === 0 || strpos($static_class, 'Tests\\') === 0) {
+                $failures[] = sprintf('%s: repo-owned camelCase static call %s::%s', $site, $static_class, $static_method);
+            } elseif (strpos($static_class, 'Symfony\\') === 0
+                || strpos($static_class, 'PhpParser\\') === 0
+                || strpos($static_class, 'PHPUnit\\') === 0
+            ) {
+                $failures[] = sprintf('%s: unallowlisted third-party static call %s::%s', $site, $static_class, $static_method);
             }
         }
     }
@@ -440,7 +592,7 @@ function scan_content(string $virtual_file, string $contents, array $allowlist, 
     $failures = [];
     scan_forbidden_tokens($virtual_file, $contents, $forbidden_identifiers, $failures);
     if (substr($virtual_file, -4) === '.php' || substr($virtual_file, -11) === 'header-stamp') {
-        scan_php_tokens($virtual_file, $contents, $allowlist, $magic_methods, $failures);
+        scan_php_tokens($virtual_file, $contents, $allowlist, $magic_methods, $failures); // virtual path is site key
     }
 
     return $failures;
@@ -494,7 +646,11 @@ foreach (collect_php_files($root, $scan_roots) as $file) {
     if ($contents === false) {
         continue;
     }
-    foreach (scan_content($file, $contents, $allowlist, $forbidden_identifiers, $magic_methods) as $failure) {
+    $site = site_from_path($file, $root);
+    if (basename($file) === 'header-stamp') {
+        $site = 'bin/header-stamp';
+    }
+    foreach (scan_content($site, $contents, $allowlist, $forbidden_identifiers, $magic_methods) as $failure) {
         $failures[] = $failure;
     }
 }

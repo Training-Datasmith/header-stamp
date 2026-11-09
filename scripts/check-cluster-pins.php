@@ -1,5 +1,23 @@
 <?php
 
+/**
+ * Copyright since 2007 PrestaShop SA and Contributors
+ * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
+ *
+ * NOTICE OF LICENSE
+ *
+ * This source file is subject to the Academic Free License version 3.0
+ * that is bundled with this package in the file LICENSE.md.
+ * It is also available through the world-wide-web at this URL:
+ * https://opensource.org/licenses/AFL-3.0
+ * If you did not receive a copy of the license and are unable to
+ * obtain it through the world-wide-web, please send an email
+ * to license@prestashop.com so we can send you a copy immediately.
+ *
+ * @author    PrestaShop SA and Contributors <contact@prestashop.com>
+ * @copyright Since 2007 PrestaShop SA and Contributors
+ * @license   https://opensource.org/licenses/AFL-3.0 Academic Free License version 3.0
+ */
 declare(strict_types=1);
 
 const INDEX_REFERENCES = [
@@ -138,31 +156,51 @@ function get_installed_json_reference(array $package): ?string
     return null;
 }
 
-function check_installed_json_gap(string $name, array $package): ?string
+function collect_json_refs_and_urls(array $package): array
 {
-    $reference = get_installed_json_reference($package);
-    if (!is_string($reference) || strlen($reference) !== 40 || !ctype_xdigit($reference)) {
-        return sprintf('check-cluster-pins (installed.json): %s has no valid source.reference or dist.reference.', $name);
-    }
-
-    foreach (INDEX_REFERENCES[$name] ?? [] as $index_ref) {
-        if (hash_equals(strtolower($index_ref), strtolower($reference))) {
-            return sprintf(
-                'check-cluster-pins (installed.json): %s must not match Training-Datasmith index SHA %s.',
-                $name,
-                $index_ref
-            );
+    $refs = [];
+    $urls = [];
+    foreach (['source', 'dist'] as $block) {
+        if (!isset($package[$block]) || !is_array($package[$block])) {
+            continue;
+        }
+        if (isset($package[$block]['reference']) && is_string($package[$block]['reference'])) {
+            $refs[] = $package[$block]['reference'];
+        }
+        if (isset($package[$block]['url']) && is_string($package[$block]['url'])) {
+            $urls[] = $package[$block]['url'];
         }
     }
 
-    $url = '';
-    if (isset($package['source']['url']) && is_string($package['source']['url'])) {
-        $url = $package['source']['url'];
-    } elseif (isset($package['dist']['url']) && is_string($package['dist']['url'])) {
-        $url = $package['dist']['url'];
+    return [$refs, $urls];
+}
+
+function check_installed_json_gap(string $name, array $package): ?string
+{
+    [$refs, $urls] = collect_json_refs_and_urls($package);
+    if ($refs === []) {
+        return sprintf('check-cluster-pins (installed.json): %s has no valid source.reference or dist.reference.', $name);
     }
-    if ($url !== '' && stripos($url, 'Training-Datasmith') !== false) {
-        return sprintf('check-cluster-pins (installed.json): %s must not come from Training-Datasmith (%s).', $name, $url);
+
+    foreach ($refs as $reference) {
+        if (strlen($reference) !== 40 || !ctype_xdigit($reference)) {
+            return sprintf('check-cluster-pins (installed.json): %s has invalid reference %s.', $name, $reference);
+        }
+        foreach (INDEX_REFERENCES[$name] ?? [] as $index_ref) {
+            if (hash_equals(strtolower($index_ref), strtolower($reference))) {
+                return sprintf(
+                    'check-cluster-pins (installed.json): %s must not match Training-Datasmith index SHA %s.',
+                    $name,
+                    $index_ref
+                );
+            }
+        }
+    }
+
+    foreach ($urls as $url) {
+        if (stripos($url, 'Training-Datasmith') !== false) {
+            return sprintf('check-cluster-pins (installed.json): %s must not come from Training-Datasmith (%s).', $name, $url);
+        }
     }
 
     $version = $package['version'] ?? null;
@@ -185,46 +223,111 @@ function check_installed_json_gap(string $name, array $package): ?string
     return null;
 }
 
-function run_wrong_sha_demos(): void
+function demo_gap_packagist_snapshot(string $name): array
 {
-    $good = '0123456789abcdef0123456789abcdef01234567';
-    $bad = 'fedcba9876543210fedcba9876543210fedcba98';
-    $demo_name = 'demo/wrong-sha';
-
-    $installed_php_entry = ['reference' => $good];
-    $installed_json_pkg = [
-        'name' => $demo_name,
-        'source' => ['reference' => $good, 'url' => 'https://github.com/example/pkg.git'],
-        'version' => '1.0.0',
+    $good_ref = '0123456789abcdef0123456789abcdef01234567';
+    $php_entry = ['reference' => $good_ref, 'version' => '4.19.5.0'];
+    $json_pkg = [
+        'name' => $name,
+        'version' => 'v4.19.5',
+        'source' => [
+            'type' => 'git',
+            'url' => 'https://github.com/nikic/PHP-Parser.git',
+            'reference' => $good_ref,
+        ],
+        'dist' => [
+            'type' => 'zip',
+            'url' => 'https://api.github.com/repos/nikic/PHP-Parser/zipball/' . $good_ref,
+            'reference' => $good_ref,
+        ],
     ];
+    if ($name === 'phpstan/phpstan') {
+        $php_entry['version'] = '1.12.34.0';
+        $json_pkg['version'] = '1.12.34';
+        $json_pkg['source'] = null;
+        $json_pkg['dist'] = [
+            'type' => 'zip',
+            'url' => 'https://api.github.com/repos/phpstan/phpstan/zipball/' . $good_ref,
+            'reference' => $good_ref,
+        ];
+        unset($json_pkg['source']);
+    }
+    if ($name === 'phpunit/phpunit') {
+        $php_entry['version'] = '8.5.56.0';
+        $json_pkg['version'] = '8.5.56';
+        $json_pkg['source']['url'] = 'https://github.com/sebastianbergmann/phpunit.git';
+    }
 
-    $bad_php = $installed_php_entry;
-    $bad_php['reference'] = $bad;
-    if (check_installed_php_reference_only($demo_name, $bad_php, $good) === null) {
-        fwrite(STDERR, "check-cluster-pins demo: installed.php must fail on wrong SHA.\n");
+    return [$php_entry, $json_pkg, $good_ref];
+}
+
+function run_gap_demos(): void
+{
+    $name = 'nikic/php-parser';
+    [$php_entry, $json_pkg, $json_ref] = demo_gap_packagist_snapshot($name);
+
+    if (check_installed_php_gap($name, $php_entry, $json_ref) !== null) {
+        fwrite(STDERR, "check-cluster-pins demo: baseline installed.php must pass.\n");
         exit(1);
     }
-    if (check_installed_php_reference_only($demo_name, $installed_php_entry, $good) !== null) {
-        fwrite(STDERR, "check-cluster-pins demo: installed.php must pass on correct SHA.\n");
-        exit(1);
-    }
-    if (check_installed_json_reference_only($demo_name, $installed_json_pkg, $good) !== null) {
-        fwrite(STDERR, "check-cluster-pins demo: installed.json must pass while installed.php is checked alone.\n");
+    if (check_installed_json_gap($name, $json_pkg) !== null) {
+        fwrite(STDERR, "check-cluster-pins demo: baseline installed.json must pass.\n");
         exit(1);
     }
 
-    $bad_json = $installed_json_pkg;
-    $bad_json['source']['reference'] = $bad;
-    if (check_installed_json_reference_only($demo_name, $bad_json, $good) === null) {
-        fwrite(STDERR, "check-cluster-pins demo: installed.json must fail on wrong SHA.\n");
+    $index_ref = INDEX_REFERENCES[$name][0];
+    $bad_php = $php_entry;
+    $bad_php['reference'] = $index_ref;
+    if (check_installed_php_gap($name, $bad_php, $json_ref) === null) {
+        fwrite(STDERR, "check-cluster-pins demo: installed.php must fail on index SHA.\n");
         exit(1);
     }
-    if (check_installed_json_reference_only($demo_name, $installed_json_pkg, $good) !== null) {
-        fwrite(STDERR, "check-cluster-pins demo: installed.json must pass on correct SHA.\n");
+    if (check_installed_json_gap($name, $json_pkg) !== null) {
+        fwrite(STDERR, "check-cluster-pins demo: installed.json must pass when only installed.php is bad.\n");
         exit(1);
     }
-    if (check_installed_php_reference_only($demo_name, $installed_php_entry, $good) !== null) {
-        fwrite(STDERR, "check-cluster-pins demo: installed.php must pass while installed.json is checked alone.\n");
+
+    $bad_json = $json_pkg;
+    $bad_json['dist']['url'] = 'https://github.com/Training-Datasmith/PHP-Parser.git';
+    if (check_installed_json_gap($name, $bad_json) === null) {
+        fwrite(STDERR, "check-cluster-pins demo: installed.json must fail on Training-Datasmith URL.\n");
+        exit(1);
+    }
+    if (check_installed_php_gap($name, $php_entry, $json_ref) !== null) {
+        fwrite(STDERR, "check-cluster-pins demo: installed.php must pass when only installed.json is bad.\n");
+        exit(1);
+    }
+
+    $bad_json2 = $json_pkg;
+    $bad_json2['dist']['reference'] = INDEX_REFERENCES[$name][1];
+    if (check_installed_json_gap($name, $bad_json2) === null) {
+        fwrite(STDERR, "check-cluster-pins demo: installed.json must fail on alternate index SHA.\n");
+        exit(1);
+    }
+    if (check_installed_php_gap($name, $php_entry, $json_ref) !== null) {
+        fwrite(STDERR, "check-cluster-pins demo: installed.php must pass when installed.json dist reference is bad.\n");
+        exit(1);
+    }
+
+    $bad_php_version = $php_entry;
+    $bad_php_version['version'] = '3.0.0';
+    if (check_installed_php_gap($name, $bad_php_version, $json_ref) === null) {
+        fwrite(STDERR, "check-cluster-pins demo: installed.php must fail on out-of-range version.\n");
+        exit(1);
+    }
+    if (check_installed_json_gap($name, $json_pkg) !== null) {
+        fwrite(STDERR, "check-cluster-pins demo: installed.json must pass when only installed.php version is bad.\n");
+        exit(1);
+    }
+
+    $bad_json_version = $json_pkg;
+    $bad_json_version['version'] = 'v9.9.9';
+    if (check_installed_json_gap($name, $bad_json_version) === null) {
+        fwrite(STDERR, "check-cluster-pins demo: installed.json must fail on out-of-range version.\n");
+        exit(1);
+    }
+    if (check_installed_php_gap($name, $php_entry, $json_ref) !== null) {
+        fwrite(STDERR, "check-cluster-pins demo: installed.php must pass when only installed.json version is bad.\n");
         exit(1);
     }
 }
@@ -258,17 +361,6 @@ function check_gap_packages(array $versions, array $json_by_name): bool
             continue;
         }
 
-        $url = '';
-        if (isset($json_pkg['source']['url']) && is_string($json_pkg['source']['url'])) {
-            $url = $json_pkg['source']['url'];
-        } elseif (isset($json_pkg['dist']['url']) && is_string($json_pkg['dist']['url'])) {
-            $url = $json_pkg['dist']['url'];
-        }
-        if ($url !== '' && stripos($url, 'Training-Datasmith') !== false) {
-            fwrite(STDERR, sprintf("check-cluster-pins: %s must not come from Training-Datasmith.\n", $name));
-            $failed = true;
-        }
-
         $php_err = check_installed_php_gap($name, $versions[$name], $json_ref);
         if ($php_err !== null) {
             fwrite(STDERR, $php_err . "\n");
@@ -285,7 +377,7 @@ function check_gap_packages(array $versions, array $json_by_name): bool
     return !$failed;
 }
 
-run_wrong_sha_demos();
+run_gap_demos();
 
 $installed_php = dirname(__DIR__) . '/vendor/composer/installed.php';
 if (!is_readable($installed_php)) {

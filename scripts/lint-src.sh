@@ -4,13 +4,15 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+mapfile -t files < <(find src bin -type f \( -name '*.php' -o -name 'header-stamp' \) | sort)
+
 count=0
-for f in src/*.php bin/header-stamp; do
+for f in "${files[@]}"; do
     if [[ ! -f "$f" ]]; then
         continue
     fi
     php -l -f "$f" >/tmp/lint-one.txt 2>&1
-  line="$(tail -n 1 /tmp/lint-one.txt)"
+    line="$(tail -n 1 /tmp/lint-one.txt)"
     if ! grep -Fxq "$line" /tmp/lint-one.txt; then
         cat /tmp/lint-one.txt
         exit 1

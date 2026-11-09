@@ -1,6 +1,5 @@
 <?php
 
-declare(strict_types=1);
 /**
  * Copyright since 2007 PrestaShop SA and Contributors
  * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
@@ -19,17 +18,23 @@ declare(strict_types=1);
  * @copyright Since 2007 PrestaShop SA and Contributors
  * @license   https://opensource.org/licenses/AFL-3.0 Academic Free License version 3.0
  */
+declare(strict_types=1);
 
 namespace Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
+use Presta_Shop\Header_Stamp\Command\Update_Licenses_Command;
 use Presta_Shop\Header_Stamp\License_Header;
+use Presta_Shop\Header_Stamp\Reporter;
+use ReflectionClass;
+use Symfony\Component\Finder\SplFileInfo;
 
 class License_Header_Test extends TestCase
 {
     public function test_get_content(): void
     {
         $license_header = new License_Header(__DIR__ . '/../../assets/afl.txt');
+        $this->assert_command_finds_license_when_declare_precedes_namespace_docblock($license_header);
         $this->assertEquals('/**
  * Copyright since 2007 PrestaShop SA and Contributors
  * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
@@ -294,5 +299,59 @@ class License_Header_Test extends TestCase
         yield ['ts'];
         yield ['css'];
         yield ['scss'];
+    }
+
+    private function assert_command_finds_license_when_declare_precedes_namespace_docblock(License_Header $license): void
+    {
+        $header = $license->get_content_by_type('php');
+        $workdir = sys_get_temp_dir() . '/header-stamp-declare-order-' . uniqid('', true);
+        if (!mkdir($workdir) && !is_dir($workdir)) {
+            throw new \RuntimeException('Could not create temp dir for declare-order check.');
+        }
+        $relative = 'Declare_Order_Sample.php';
+        $payload = '<?php' . "\n"
+            . "declare(strict_types=1);\n"
+            . $header . "\n"
+            . "namespace Header_Stamp_Sample;\n";
+        file_put_contents($workdir . '/' . $relative, $payload);
+
+        $command = new Update_Licenses_Command();
+        $rc = new ReflectionClass($command);
+        foreach (['run_as_dry', 'target_directory', 'license', 'license_header', 'reporter', 'discrimination_string'] as $prop) {
+            $rp = $rc->getProperty($prop);
+            $rp->setAccessible(true);
+            if ($prop === 'run_as_dry') {
+                $rp->setValue($command, true);
+            } elseif ($prop === 'target_directory') {
+                $rp->setValue($command, $workdir);
+            } elseif ($prop === 'license') {
+                $rp->setValue($command, __DIR__ . '/../../assets/afl.txt');
+            } elseif ($prop === 'license_header') {
+                $rp->setValue($command, $license);
+            } elseif ($prop === 'reporter') {
+                $rp->setValue($command, new Reporter());
+            } elseif ($prop === 'discrimination_string') {
+                $rp->setValue($command, ['PrestaShop SA and Contributors', 'NOTICE OF LICENSE']);
+            }
+        }
+
+        $parser = (new \PhpParser\ParserFactory())->create(\PhpParser\ParserFactory::PREFER_PHP7);
+        $nodes = $parser->parse(file_get_contents($workdir . '/' . $relative));
+        if (!is_array($nodes)) {
+            throw new \RuntimeException('Parser did not return an array of nodes.');
+        }
+        $file = new SplFileInfo($workdir . '/' . $relative, '', $relative);
+        $rm = $rc->getMethod('add_license_to_nodes');
+        $rm->setAccessible(true);
+        $rm->invoke($command, $nodes, $file);
+
+        $reporter = $rc->getProperty('reporter');
+        $reporter->setAccessible(true);
+        /** @var Reporter $rep */
+        $rep = $reporter->getValue($command);
+        $report = $rep->get_report();
+        if ($report['fixed'] !== []) {
+            throw new \RuntimeException('Declare-before-namespace license must not be reported as missing.');
+        }
     }
 }

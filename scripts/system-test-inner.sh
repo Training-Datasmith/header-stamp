@@ -7,15 +7,51 @@ ROOT_DIR="/app"
 UNIT_OK_LINE="$(php -r 'echo json_decode(file_get_contents("tests/baseline.json"), true)["unit_phpunit_ok_line"];')"
 INTEGRATION_OK_LINE="$(php -r 'echo json_decode(file_get_contents("tests/baseline.json"), true)["integration_phpunit_ok_line"];')"
 
+strip_ansi_file() {
+    local in_file="$1"
+    local out_file="$2"
+    sed -E 's/\x1b\[[0-9;]*[[:alpha:]]//g' "${in_file}" >"${out_file}"
+}
+
 fail_deprecation_output() {
     local label="$1"
     local file="$2"
     local stripped
     stripped="$(mktemp)"
-    sed -E 's/\x1b\[[0-9;]*[[:alpha:]]//g' "${file}" >"${stripped}"
+    strip_ansi_file "${file}" "${stripped}"
     if grep -E '^(PHP[[:space:]]+)?(Warning|Deprecated|Notice):' "${stripped}" >/dev/null; then
         echo "${label}: output contains Warning, Deprecated, or Notice lines" >&2
         grep -E '^(PHP[[:space:]]+)?(Warning|Deprecated|Notice):' "${stripped}" >&2 || true
+        rm -f "${stripped}"
+        exit 1
+    fi
+    rm -f "${stripped}"
+}
+
+require_exact_line_on_stripped() {
+    local label="$1"
+    local file="$2"
+    local line="$3"
+    local stripped
+    stripped="$(mktemp)"
+    strip_ansi_file "${file}" "${stripped}"
+    if ! grep -Fxq "${line}" "${stripped}"; then
+        echo "${label}: missing exact success line on ANSI-stripped output: ${line}" >&2
+        rm -f "${stripped}"
+        exit 1
+    fi
+    rm -f "${stripped}"
+}
+
+require_regex_on_stripped() {
+    local label="$1"
+    local file="$2"
+    local pattern="$3"
+    local stripped
+    stripped="$(mktemp)"
+    strip_ansi_file "${file}" "${stripped}"
+    if ! grep -Eq "${pattern}" "${stripped}"; then
+        echo "${label}: missing required pattern on ANSI-stripped output: ${pattern}" >&2
         rm -f "${stripped}"
         exit 1
     fi
@@ -71,10 +107,7 @@ if [[ ${pins_status} -ne 0 ]]; then
     rm -f "${pins_out}"
     exit "${pins_status}"
 fi
-if ! grep -Fxq 'check-cluster-pins: all cluster packages match expected SHAs and aliases.' "${pins_out}"; then
-    echo 'pin check: missing exact success line' >&2
-    exit 1
-fi
+require_exact_line_on_stripped 'pin check' "${pins_out}" 'check-cluster-pins: all cluster packages match expected SHAs and aliases.'
 rm -f "${pins_out}"
 
 audit_out="$(mktemp)"
@@ -88,10 +121,7 @@ if [[ ${audit_status} -ne 0 ]]; then
     rm -f "${audit_out}"
     exit "${audit_status}"
 fi
-if ! grep -Fxq 'No security vulnerability advisories found.' "${audit_out}"; then
-    echo 'composer audit: missing exact success line' >&2
-    exit 1
-fi
+require_exact_line_on_stripped 'composer audit' "${audit_out}" 'No security vulnerability advisories found.'
 rm -f "${audit_out}"
 
 lint_out="$(mktemp)"
@@ -103,10 +133,7 @@ if [[ ${lint_status} -ne 0 ]]; then
     rm -f "${lint_out}"
     exit "${lint_status}"
 fi
-if ! grep -Eq '^php -l: No syntax errors detected in [0-9]+ files$' "${lint_out}"; then
-    echo 'php -l: missing summary success line' >&2
-    exit 1
-fi
+require_regex_on_stripped 'php -l' "${lint_out}" '^php -l: No syntax errors detected in [0-9]+ files$'
 rm -f "${lint_out}"
 
 unit_out="$(mktemp)"
@@ -120,10 +147,7 @@ if [[ ${unit_status} -ne 0 ]]; then
     rm -f "${unit_out}"
     exit "${unit_status}"
 fi
-if ! grep -Fxq "${UNIT_OK_LINE}" "${unit_out}"; then
-    echo "phpunit unit: missing strict success line ${UNIT_OK_LINE}" >&2
-    exit 1
-fi
+require_exact_line_on_stripped 'phpunit unit' "${unit_out}" "${UNIT_OK_LINE}"
 rm -f "${unit_out}"
 
 integration_out="$(mktemp)"
@@ -137,10 +161,7 @@ if [[ ${integration_status} -ne 0 ]]; then
     rm -f "${integration_out}"
     exit "${integration_status}"
 fi
-if ! grep -Fxq "${INTEGRATION_OK_LINE}" "${integration_out}"; then
-    echo "phpunit integration: missing strict success line ${INTEGRATION_OK_LINE}" >&2
-    exit 1
-fi
+require_exact_line_on_stripped 'phpunit integration' "${integration_out}" "${INTEGRATION_OK_LINE}"
 rm -f "${integration_out}"
 
 phpstan_out="$(mktemp)"
@@ -154,10 +175,7 @@ if [[ ${phpstan_status} -ne 0 ]]; then
     rm -f "${phpstan_out}"
     exit "${phpstan_status}"
 fi
-if ! grep -Eq '^\s+\[OK\] No errors\s*$' "${phpstan_out}"; then
-    echo 'phpstan: missing [OK] No errors' >&2
-    exit 1
-fi
+require_regex_on_stripped 'phpstan' "${phpstan_out}" '^[[:space:]]+\[OK\] No errors[[:space:]]*$'
 rm -f "${phpstan_out}"
 
 rename_out="$(mktemp)"
@@ -171,15 +189,12 @@ if [[ ${rename_status} -ne 0 ]]; then
     rm -f "${rename_out}"
     exit "${rename_status}"
 fi
-if ! grep -Fxq 'rename-check: no stale repo-owned names.' "${rename_out}"; then
-    echo 'rename-check: missing exact success line' >&2
-    exit 1
-fi
+require_exact_line_on_stripped 'rename-check' "${rename_out}" 'rename-check: no stale repo-owned names.'
 rm -f "${rename_out}"
 
 stamp_out="$(mktemp)"
 set +e
-php -d date.timezone=UTC -d error_reporting=32767 bin/header-stamp --dry-run --target=src >"${stamp_out}" 2>&1
+php -d date.timezone=UTC -d error_reporting=32767 bin/header-stamp --dry-run >"${stamp_out}" 2>&1
 stamp_status=$?
 set -e
 cat "${stamp_out}"
@@ -188,10 +203,7 @@ if [[ ${stamp_status} -ne 0 ]]; then
     rm -f "${stamp_out}"
     exit "${stamp_status}"
 fi
-if ! grep -Fxq 'Header stamp configuration:' "${stamp_out}"; then
-    echo 'header-stamp: missing configuration header' >&2
-    exit 1
-fi
+require_exact_line_on_stripped 'header-stamp' "${stamp_out}" 'Header stamp configuration:'
 rm -f "${stamp_out}"
 
 echo 'system-test: all steps passed.'
